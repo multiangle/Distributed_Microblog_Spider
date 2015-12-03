@@ -23,6 +23,8 @@ from server_config import GET_PROXY_URL,PROXY_POOL_SIZE
 
 class proxy_manager():
     def __init__(self,proxy_pool_size=PROXY_POOL_SIZE):
+        self.raw_proxy_pool=[]
+        self.raw_proxy_pool_size=10*proxy_pool_size     #一般情况下，rawproxy池大小是proxy池大小的10倍
         self.proxy_pool=[]
         self.proxy_pool_size=proxy_pool_size
 
