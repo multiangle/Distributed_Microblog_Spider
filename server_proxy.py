@@ -27,11 +27,12 @@ import File_Interface as FI
 
 class proxy_manager(threading.Thread):
 
-    def __init__(self,proxy_pool,proxy_pool_size=PROXY_POOL_SIZE):
+    def __init__(self,proxy_pool,proxy_lock,proxy_pool_size=PROXY_POOL_SIZE):
         threading.Thread.__init__(self)
         self.proxy_pool=proxy_pool
         self.proxy_pool_size=proxy_pool_size
         self.start_up()
+        self.proxy_lock=proxy_lock
 
     def start_up(self):
         """
@@ -225,6 +226,9 @@ class proxy_pool():
         #TODO
 
 if __name__=='__main__':
-    pass
+    proxy_lock=threading.Lock()
+    proxy=proxy_pool()
+    t=proxy_manager(proxy,proxy_lock)
+    t.start()
 
 
