@@ -31,8 +31,8 @@ class proxy_manager(threading.Thread):
         threading.Thread.__init__(self)
         self.proxy_pool=proxy_pool
         self.proxy_pool_size=proxy_pool_size
-        self.start_up()
         self.proxy_lock=proxy_lock
+        self.start_up()
 
     def start_up(self):
         """
@@ -46,27 +46,40 @@ class proxy_manager(threading.Thread):
         """
         function:   The main circle of this process.
                     Monitor the state of proxy pool
-                    Receive and transmit signal of event between threads processes.b
-                    send valid proxy to client terminal
         """
-        #TODO
-        pass
+        thread_pool=[]
+        run_value=[int(self.proxy_pool_size/2),int(self.proxy_pool_size/4)]
+        MAX_VALID_PROXY_THREAD_NUM=2                        # maximum num of thread of find valid proxy
+        for i in range(MAX_VALID_PROXY_THREAD_NUM):        # initialize of thread pool
+            temp_t=find_valid_proxy(self.proxy_pool,self.proxy_lock)
+            thread_pool.append(temp_t)
+
+        if run_value.__len__()!=MAX_VALID_PROXY_THREAD_NUM: # check data formation
+            raise ValueError('the length of run_value is not equal to '
+                             'MAX_VALID_PROXY_THREAD_NUM')
+
+        while (True):
+            time.sleep(0.1)
+            for i in range(thread_pool.__len__()):
+                if not thread_pool[i].is_alive():
+                    if self.proxy_pool.size()<=run_value[i]:
+                        thread_pool[i]=find_valid_proxy(self.proxy_pool,self.proxy_lock)
+                        thread_pool[i].start()
 
 
 class find_valid_proxy(threading.Thread):
     """
     function:   Get raw proxy list,check them ,and find valide proxy list
     """
-    #TODO
     def __init__(self,proxy_pool,proxy_lock):
         threading.Thread.__init__(self)
         self.proxy_pool=proxy_pool      #proxy pool
         self.proxy_lock=proxy_lock
         self.raw_proxy=[]
-        self.get_raw_proxy()
         self.raw_proxy_lock=threading.Lock()
 
     def run(self):
+        self.get_raw_proxy()
         self.threads=[]
         for i in range(VERIFY_PROXY_THREAD_NUM):
             t=check_proxy(self.raw_proxy,self.proxy_pool,self.raw_proxy_lock,self.proxy_lock)
@@ -75,12 +88,13 @@ class find_valid_proxy(threading.Thread):
             t.start()
 
     def get_raw_proxy(self):
-        RAW_PROXY_RATIO=10      # the ratio of raw and valid proxy
-        current_proxy_num=self.proxy_pool.__len__()
+        RAW_PROXY_RATIO=5      # the ratio of raw and valid proxy
+        current_proxy_num=self.proxy_pool.size()
         fetch_size=max(0,PROXY_POOL_SIZE-current_proxy_num)*RAW_PROXY_RATIO+1
         url=GET_PROXY_URL.format(NUM=fetch_size)
         try:
-            res=request.urlopen(url).read()
+            res=request.urlopen(url)
+            res=res.read()
             res=str(res,encoding='utf-8')
             self.raw_proxy=res.split('\r\n')
             if self.raw_proxy.__len__()<fetch_size:
@@ -90,7 +104,7 @@ class find_valid_proxy(threading.Thread):
             print('error: find_valid_proxy -> get_raw_proxy: ',e)
             # if can't get proxy ,sleep for 1 sec , then try again
             try:
-                time.sleep(1)
+                time.sleep(3)
                 res=request.urlopen(url).read()
                 res=str(res,encoding='utf-8')
                 self.raw_proxy=res.split('\r\n')
@@ -225,10 +239,20 @@ class proxy_pool():
         pass
         #TODO
 
+def proxy_info_print(str_info,type='NORMAL'):     # decide if normal of key infomation should be print
+    from server_config import PROXY_NORMAL_INFO_PRINT
+    if type=='NORMAL':
+        if PROXY_NORMAL_INFO_PRINT:
+            print(str_info)
+
 if __name__=='__main__':
     proxy_lock=threading.Lock()
     proxy=proxy_pool()
     t=proxy_manager(proxy,proxy_lock)
     t.start()
+    while True:
+        time.sleep(0.1)
+        print(proxy.size())
+
 
 
