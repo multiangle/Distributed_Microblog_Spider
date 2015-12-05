@@ -1,11 +1,13 @@
 __author__ = 'multiangle'
 """
     NAME:       server_proxy.py
-    VERSION:    _0.1_
+    PY_VERSION: python3.4
     FUNCTION:   This part is used to get large number of proxy
                 from certain http proxy website, then verify if
                 they are useful. Useful proxy is saved in cache
                 and provided to client to get info from website
+    VERSION:    _0.1_
+
     UPDATE HISTORY:
         _0.1_:  the first edition
 """
@@ -215,12 +217,12 @@ class proxy_pool():
     def __init__(self):
         self.proxy=[]
 
-    def get(self,num):
+    def get(self,num):      # return [[]...[]]
         if self.proxy.__len__()==0:
             return []
         if self.proxy.__len__()<num:
             num=self.proxy.__len__()
-        res=[x[0] for x in self.proxy[0:num]]
+        res=[x for x in self.proxy[0:num]]
         self.proxy=self.proxy[num:]
         return res
 

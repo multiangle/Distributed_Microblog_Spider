@@ -1,40 +1,109 @@
 __author__ = 'multiangle'
-#--------------------------------------------------------
-#
-#    This client part of distrubuted microblog spider.
-#    Version_0.1_
-#    In this version, the client part is mianly achieved by tornado
-#
-#--------------------------------------------------------
+"""
+    NAME:       client.py
+    PY_VERSION: python3.4
+    FUNCTION:   This client part of distrubuted microblog spider.
+                The client request uid from server, and server
+                return the list of uid whose info should be searched.
+                After searching data, client will return data to
+                server by POST method. If the data wanted to post
+                is too large, it will be seperated into severl parts
+                and transport individually
+    VERSION:    _0.1_
 
-#--------------------------------------------------------
+    UPDATE_HISTORY:
+        _0.1_:  The 1st edition
+"""
+#======================================================================
 #----------------import package--------------------------
-
 # import python package
-
-# import tornado
-import tornado.web
-import tornado.ioloop
-import tornado.options
-from tornado.options import  define,options
+import urllib.request as request
+from multiprocessing import Process
+import threading
+from bs4 import BeautifulSoup
+import time
 
 # import from this folder
 import client_config as config
-#--------------------------------------------------------
+#=======================================================================
 
+#=======================================================================
 #------------------code session--------------------------
-define('port',default=7000,help='run on the given port',type=int)
 
-class Application(tornado.web.Application):
-
+class client():          # the main process of client
     def __init__(self):
-        handlers=[
-            (r'/add_user_id',add_user_id),
-        ]
-        settings=dict(
-            debug=config.TORNADO_DEBUG
-        )
-        tornado.web.Application.__init__(self,handlers,**settings)
+        self.check_server()
+        self.task_uid=self.get_task_uid()
+        self.run()
+
+    def check_server(self):
+        """
+        check if server can provide service
+        if server is valid, will return 'connection valid'
+        """
+        url='{url}/auth'.format(url=config.SERVER_URL)
+        while True:
+            try:
+                res=request.urlopen(url,timeout=5).read()
+                res=str(res,encoding='utf8')
+                if 'connection valid' in res:
+                    break
+                else:
+                    raise ConnectionError('error: client-> check_server :'
+                                          'cannot connect to server')
+            except Exception as e:
+                print(e)
+                time.sleep(1)       # sleep for 1 seconds
+
+    def get_task_uid(self):
+        """
+        get task user id from server
+        """
+        url='{url}/task_uid'.format(config.SERVER_URL)
+        try:
+            res=request.urlopen(url,timeout=10).read()
+            res=str(res,encoding='utf8')
+        except Exception as e:
+            self.check_server()
+            res=request.urlopen(url,timeout=10).read()
+            res=str(res,encoding='utf8')
+        if 'no task uid' in res:       # if server have no task uid ,return 'no task uid'
+            raise TypeError('error: client -> get_task_uid : unable to get task uid')
+        return res
+
+    def get_basic_info(self,uid):
+        """
+        get user's basic information,
+        :param uid:
+        :return:basic_info(dict)
+        """
+        #TODO
+        pass
+
+    def get_proxy_pool(self,num):
+        """
+        request certain number of proxy from server
+        :param num:
+        :return: a list of proxy as formation of [[proxy(str),timeout(float)]...[]]
+        """
+        #TODO
+        pass
+
+    def run(self):
+        self.basic_info=self.get_basic_info(self.task_uid)
+        self.proxy_pool=self.get_proxy_pool(config.PROXY_POOL_SIZE)
+        self.atten_list=[]
+        self.url_task_list=[]
+        #TODO
+        # 创建任务队列，建立爬网页线程
+        # 监控proxy pool,建议get_proxy_pool单独开一个线程，如果server立即返回则马上关闭，否则设为长连接
+
+
+
+
+
 
 if __name__=='__main__':
-    tornado.options.parse_command_line()
+    p=Process(target=client,args=())
+    p.start()
+
