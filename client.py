@@ -44,14 +44,20 @@ class client():          # the main process of client
         self.get_task()         #获取任务
         self.proxy_pool=[]
         self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
-        self.basic_info=self.get_basic_info(self.task_uid)   #获取任务id的基本信息
         self.run()
 
     def run(self):      # main code of the process
-        pass
-        #TODO
-        # 创建任务队列，建立爬网页线程
         # 监控proxy pool,建议get_proxy_pool单独开一个线程，如果server立即返回则马上关闭，否则设为长连接
+        t=getInfo(self.proxy_pool,self.task_uid)
+        t.start()
+        while True:
+            time.sleep(0.1)
+            if self.proxy_pool.__len__()<int(config.PROXY_POOL_SIZE/2):
+                self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
+            if not t.is_alive():
+                break
+                #TODO 此处有待斟酌，就是关于如何判断执行完线程方面
+                #TODO 此外，用完且有效的proxy需要返回，以节约proxy使用
 
     def check_server(self):
         """
@@ -71,7 +77,9 @@ class client():          # the main process of client
                     info_manager(error_str,type='KEY')
                     os._exit(0)
             except Exception as e:
-                print(e)
+                err_str='error:client->check_server:cannot connect to server; ' \
+                        'process sleeping'
+                info_manager(err_str,type='NORMAL')
                 time.sleep(1)       # sleep for 1 seconds
 
     def get_task(self):
@@ -143,7 +151,6 @@ class client():          # the main process of client
             return
         proxy_pool[:]=proxy_pool[:]+data
 
-
 class getInfo(threading.Thread):       # 用来处理第一类任务，获取用户信息和关注列表
 
     def __init__(self,proxy_pool,uid):
@@ -151,6 +158,8 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
         self.conn=Connector(proxy_pool)
         self.uid=uid
         self.user_basic_info=self.getBasicInfo()
+        self.attends=self.getAttends(self.user_basic_info['container_id'],proxy_pool)
+        # TODO 发送信息。注意检查是否需要将内容分批发送
 
     def getBasicInfo(self):
         """
@@ -204,6 +213,138 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
               'description:',user_basic_info['description']
         )
         return user_basic_info
+
+    def getAttends(self,container_id,proxy_pool):
+        attends_num=self.user_basic_info['attends_num']
+        model_url='http://m.weibo.cn/page/tpl?containerid='+str(container_id)+'_-_FOLLOWERS&page={page}'
+        page_num=int(attends_num/10)
+        task_url=[model_url.format(page=(i+1)) for i in range(page_num)]
+        # TODO 可以得话，可以选择将task_url随机打乱一下顺序
+        attends=[]
+        threads_pool=[]                     #线程池
+        for i in range(config.THREAD_NUM):  # thread initialization
+            t=self.getAttends_subThread(task_url,proxy_pool,attends)
+            threads_pool.append(t)
+        for t in threads_pool:              # thread_list
+            t.start()
+        while True:
+            time.sleep(0.2)
+            if task_url :   # 如果 task_url 不为空，则检查是否有进程异常停止
+                for i in range(config.THREAD_NUM):
+                    if not threads_pool[i].is_alive() :
+                        threads_pool[i]=self.getAttends_subThread(task_url,proxy_pool,attends)
+                        threads_pool[i].start()
+            else:           #如果 task_url 为空，则当所有线程停止时跳出
+                all_stoped=True
+                for t in threads_pool:
+                    if t.is_alive():
+                        all_stoped=False
+                if all_stoped:
+                    break
+        # TODO 获得页面中肯定有重复的，需要去重，放入self.attends里面
+        return attends
+
+
+
+    class getAttends_subThread(threading.Thread):
+        def __init__(self,task_url,proxy_pool,attends):
+            threading.Thread.__init__(self)
+            self.task_url=task_url
+            self.conn=Connector(proxy_pool)
+            self.attends=attends
+
+        def run(self):
+            while True:
+                if not self.task_url:
+                    break
+                url=self.task_url.pop(0)
+                try:
+                    page=self.conn.getData(url,timeout=10,reconn_num=3,proxy_num=5)
+                    page='{'+page[:page.__len__()-1]
+                    page=json.loads(page)
+                    temp_list=[card_group_item_parse(x) for x in page['card_group']]
+                    self.attends[:]=self.attends[:]+temp_list
+                    info_str='Page {url} is done'.format(url=url)
+                    info_manager(info_str,type='NORMAL')
+                except Exception as e:
+                    try:                #分析是否是因为 “没有内容” 出错，如果是，当前的应对措施是休眠5秒，再次请求。
+                        page=page.replace(' ','')
+                        page="{\"test\":"+page+"}"
+                        data=json.loads(page)
+                        if data['test'][1]['msg']=='没有内容':
+                            time.sleep(5)
+                            print('--- fail to get valid page, sleep for 5 seconds ---')
+                            page = self.conn.getData(url)
+                            try:
+                                page=re.findall(r'"card_group":.+?]}]',page)[0]
+                                page='{'+page[:page.__len__()-1]
+                                page=json.loads(page)
+                                temp_list=[card_group_item_parse(x) for x in page['card_group']]
+                                self.attends[:]=self.attends[:]+temp_list
+                                info_str='Page {url} is done'.format(url=url)
+                                info_manager(info_str,type='NORMAL')
+                            except:
+                                pass    #如果再次失败，当前措施是直接跳过
+                    except Exception as e:  #如果不是因为 “没有内容出错” 则出错原因不明，直接跳过
+                        if config.KEY_INFO_PRINT: print(e)
+                        err_str='error:getAttends_subThread->run:Unknown page type, fail to parse {url}'.format(url=url)
+                        info_manager(err_str,type='NORMAL')
+                        if config.NOMAL_INFO_PRINT: print(page)
+                        if config.NOMAL_INFO_PRINT: print('--- skip this page ---')
+                        pass
+
+def card_group_item_parse(sub_block):
+        """
+        :param user_block   : json type
+        :return:  user      : dict type
+        """
+        user_block=sub_block['user']
+        user_block_keys=user_block.keys()
+        user={}
+
+        if 'profile_url' in user_block_keys:
+            user['basic_page']=user_block['profile_url']
+
+        if 'screen_name' in user_block_keys:
+            user['name']=user_block['screen_name']
+
+        if 'desc2' in user_block_keys:
+            user['recent_update_time']=user_block['desc2']
+
+        if 'desc1' in user_block_keys:
+            user['recent_update_content']=user_block['desc1']
+
+        if 'gender' in user_block_keys:
+            user['gender']=('male' if user_block['gender']=='m' else 'female')
+
+        if 'verified_reason' in user_block_keys:
+            user['verified_reason']=user_block['verified_reason']
+
+        if 'profile_image_url' in user_block_keys:
+            user['profile']=user_block['profile_image_url']
+
+        if 'statuses_count' in user_block_keys:
+            temp=user_block['statuses_count']
+            if isinstance(temp,str):
+                temp=int(temp.replace('万','0000'))
+            user['blog_num']=temp
+
+        if 'description' in user_block_keys:
+            user['description']=user_block['description']
+
+        if 'follow_me' in user_block_keys:
+            user['follow_me']=user_block['follow_me']
+
+        if 'id' in user_block_keys:
+            user['uid']=user_block['id']
+
+        if 'fansNum' in user_block_keys:
+            temp=user_block['fansNum']
+            if isinstance(temp,str):
+                temp=int(temp.replace('万','0000'))
+            user['fans_num']=temp
+
+        return user
 
 class Connector():
     def __init__(self,proxy_pool):      #从proxy_pool队列中取出一个
@@ -287,10 +428,6 @@ def info_manager(info_str,type='NORMAL'):
     if type=='KEY':
         if config.KEY_INFO_PRINT:
             print(str)
-
-
-
-
 
 if __name__=='__main__':
     p=Process(target=client,args=())
