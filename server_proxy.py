@@ -20,6 +20,7 @@ import re,json
 import time
 import threading
 import urllib.request as request
+import random
 
 # import from this folder
 from server_config import GET_PROXY_URL,PROXY_POOL_SIZE,PROXY_PATH     #about proxy
@@ -106,7 +107,7 @@ class find_valid_proxy(threading.Thread):
             print('error: find_valid_proxy -> get_raw_proxy: ',e)
             # if can't get proxy ,sleep for 1 sec , then try again
             try:
-                time.sleep(3)
+                time.sleep(random.randint(5,15))
                 res=request.urlopen(url).read()
                 res=str(res,encoding='utf-8')
                 self.raw_proxy=res.split('\r\n')

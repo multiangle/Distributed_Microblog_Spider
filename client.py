@@ -26,9 +26,6 @@ import json
 import http.cookiejar
 import re
 
-# import from outer package
-from bs4 import BeautifulSoup
-
 # import from this folder
 import client_config as config
 #=======================================================================
@@ -143,7 +140,7 @@ class client():          # the main process of client
             info_manager(err_str,type='KEY')
             return
         try:
-            data=res.split('\r\n')
+            data=res.split(';')             # 'url,timedelay;url,timedelay;.....'
             data=[proxy_object(x) for x in data]
         except Exception as e:
             err_str='error: client -> get_proxy_pool : fail to parse proxy str info:\r\n'+res
@@ -243,8 +240,6 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                     break
         # TODO 获得页面中肯定有重复的，需要去重，放入self.attends里面
         return attends
-
-
 
     class getAttends_subThread(threading.Thread):
         def __init__(self,task_url,proxy_pool,attends):
@@ -412,8 +407,9 @@ class Connector():
 class proxy_object():
     def __init__(self,data):    # in this version ,data is in formation of [str(proxy),int(timedelay)]
         self.raw_data=data
-        self.url=data[0]
-        self.timedelay=data[1]
+        res=data.split(',')
+        self.url=res[0]
+        self.timedelay=res[1]
     def getUrl(self):
         return self.url
     def getRawType(self):       #返回原来格式
