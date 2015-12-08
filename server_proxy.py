@@ -24,7 +24,7 @@ import random
 
 # import from this folder
 from server_config import GET_PROXY_URL,PROXY_POOL_SIZE,PROXY_PATH     #about proxy
-from server_config import VERIFY_PROXY_THREAD_NUM
+from server_config import VERIFY_PROXY_THREAD_NUM,MAX_VALID_PROXY_THREAD_NUM
 import File_Interface as FI
 #=======================================================================
 
@@ -91,11 +91,12 @@ class find_valid_proxy(threading.Thread):
             t.start()
 
     def get_raw_proxy(self):
-        RAW_PROXY_RATIO=5      # the ratio of raw and valid proxy
+        RAW_PROXY_RATIO=3      # the ratio of raw and valid proxy
         current_proxy_num=self.proxy_pool.size()
         fetch_size=max(0,PROXY_POOL_SIZE-current_proxy_num)*RAW_PROXY_RATIO+1
         url=GET_PROXY_URL.format(NUM=fetch_size)
         try:
+            time.sleep(random.randint(2,2*MAX_VALID_PROXY_THREAD_NUM))
             res=request.urlopen(url)
             res=res.read()
             res=str(res,encoding='utf-8')
@@ -107,7 +108,7 @@ class find_valid_proxy(threading.Thread):
             print('error: find_valid_proxy -> get_raw_proxy: ',e)
             # if can't get proxy ,sleep for 1 sec , then try again
             try:
-                time.sleep(random.randint(5,15))
+                time.sleep(random.randint(2,2*MAX_VALID_PROXY_THREAD_NUM))
                 res=request.urlopen(url).read()
                 res=str(res,encoding='utf-8')
                 self.raw_proxy=res.split('\r\n')
@@ -241,6 +242,8 @@ class proxy_pool():
     def sort(self):         # sort according to the timedelay
         pass
         #TODO
+    def empty(self):        #清空proxy列表
+        self.proxy=[]
 
 def proxy_info_print(str_info,type='NORMAL'):     # decide if normal of key infomation should be print
     from server_config import PROXY_NORMAL_INFO_PRINT

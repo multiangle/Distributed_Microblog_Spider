@@ -44,7 +44,9 @@ class Application(tornado.web.Application):
         handlers=[
             (r'/auth',AuthHandler),
             (r'/proxy/',ProxyHandler),
-            (r'/task',TaskHandler)
+            (r'/task',TaskHandler),
+            (r'/proxy_size',ProxySize),
+            (r'/proxy_empty',ProxyEmpty)
         ]
         settings=dict(
             debug=True
@@ -77,7 +79,17 @@ class TaskHandler(tornado.web.RequestHandler):
         self.write('1221171697,connect')
         self.finish()
 
+class ProxySize(tornado.web.RequestHandler):
+    global proxy
+    def get(self):
+        self.write(str(proxy.size()))
 
+class ProxyEmpty(tornado.web.RequestHandler):
+    global proxy
+    def get(self):
+        proxy.empty()
+        if proxy.size()<2:
+            self.write('empty proxy success')
 
 
 if __name__=='__main__':

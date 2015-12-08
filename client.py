@@ -25,6 +25,7 @@ import os
 import json
 import http.cookiejar
 import re
+import random
 
 # import from this folder
 import client_config as config
@@ -83,7 +84,7 @@ class client():          # the main process of client
         """
         get task user id from server
         """
-        url='{url}/task'.format(config.SERVER_URL)
+        url='{url}/task'.format(url=config.SERVER_URL)
         try:
             res=request.urlopen(url,timeout=10).read()
             res=str(res,encoding='utf8')
@@ -152,8 +153,9 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
 
     def __init__(self,proxy_pool,uid):
         threading.Thread.__init__(self)
-        self.conn=Connector(proxy_pool)
+        self.conn=Connector(proxy_pool,if_proxy=False)      #请求用户基本信息的时候会暂时关掉proxy
         self.uid=uid
+        time.sleep(max(0,random.gauss(1,0.2)))
         self.user_basic_info=self.getBasicInfo()
         self.attends=self.getAttends(self.user_basic_info['container_id'],proxy_pool)
         # TODO 发送信息。注意检查是否需要将内容分批发送
@@ -164,7 +166,7 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
         :param uid:
         :return:basic_info(dict)
         """
-        homepage_url = 'http://m.weibo.cn/u/' + str(self.__uid)
+        homepage_url = 'http://m.weibo.cn/u/' + str(self.uid)
         try:
             homepage_str = self.conn.getData(homepage_url)
         except :
@@ -253,32 +255,47 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                 if not self.task_url:
                     break
                 url=self.task_url.pop(0)
+                time.sleep(max(random.gauss(0.5,0.1),0.05))
                 try:
-                    page=self.conn.getData(url,timeout=10,reconn_num=3,proxy_num=5)
-                    page='{'+page[:page.__len__()-1]
+                    page=self.conn.getData(url,timeout=5,reconn_num=1,proxy_num=30)
+                except Exception as e:
+                    print('error:getAttends_subThread->run: fail to get page'+url)
+                    print('skip this page')
+                    continue
+                page='{\"data\":['+page[1:]+'}'
+                try:
                     page=json.loads(page)
+                    page=page['data'][1]
                     temp_list=[card_group_item_parse(x) for x in page['card_group']]
                     self.attends[:]=self.attends[:]+temp_list
-                    info_str='Page {url} is done'.format(url=url)
+                    info_str='Success: Page {url} is done'.format(url=url)
                     info_manager(info_str,type='NORMAL')
                 except Exception as e:
                     try:                #分析是否是因为 “没有内容” 出错，如果是，当前的应对措施是休眠5秒，再次请求。
-                        page=page.replace(' ','')
-                        page="{\"test\":"+page+"}"
+                        # page=page.replace(' ','')
                         data=json.loads(page)
                         if data['test'][1]['msg']=='没有内容':
                             time.sleep(5)
                             print('--- fail to get valid page, sleep for 5 seconds ---')
-                            page = self.conn.getData(url)
                             try:
-                                page=re.findall(r'"card_group":.+?]}]',page)[0]
-                                page='{'+page[:page.__len__()-1]
+                                page = self.conn.getData(url,timeout=5,reconn_num=1,proxy_num=30)
+                            except Exception as e:
+                                print('error:getAttends_subThread->run: fail to get page twice:'+url)
+                                print('skip this page')
+                                continue
+                            try:
+                                page='{\"data\":['+page[1:]+'}'
                                 page=json.loads(page)
+                                page=page['data'][1]
+                                # page=re.findall(r'"card_group":.+?]}]',page)[0]
+                                # page='{'+page[:page.__len__()-1]
+                                # page=json.loads(page)
                                 temp_list=[card_group_item_parse(x) for x in page['card_group']]
                                 self.attends[:]=self.attends[:]+temp_list
-                                info_str='Page {url} is done'.format(url=url)
+                                info_str='Success: Page {url} is done'.format(url=url)
                                 info_manager(info_str,type='NORMAL')
                             except:
+                                print(e)
                                 pass    #如果再次失败，当前措施是直接跳过
                     except Exception as e:  #如果不是因为 “没有内容出错” 则出错原因不明，直接跳过
                         if config.KEY_INFO_PRINT: print(e)
@@ -342,18 +359,22 @@ def card_group_item_parse(sub_block):
         return user
 
 class Connector():
-    def __init__(self,proxy_pool):      #从proxy_pool队列中取出一个
+    def __init__(self,proxy_pool,if_proxy=True):      #从proxy_pool队列中取出一个
         self.headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
                                        'AppleWebKit/600.1.3 (KHTML, like Gecko) Version/8.0 Mobile'
                                        '/12A4345d Safari/600.1.4'}
         self.proxy_pool=proxy_pool
-        self.current_proxy_oj=proxy_pool.pop(0)
         self.cj=http.cookiejar.CookieJar()
-        self.proxy_handler=request.ProxyHandler({'http':self.current_proxy_oj.url})
-        self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj),self.proxy_handler)
+        if if_proxy :
+            self.current_proxy_oj=proxy_pool.pop(0)
+            self.proxy_handler=request.ProxyHandler({'http':self.current_proxy_oj.url})
+            self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj),self.proxy_handler)
+        else:
+            self.current_proxy_oj=None
+            self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj))
         request.install_opener(self.opener)
 
-    def getData(self,url,timeout=10,reconn_num=3,proxy_num=5):
+    def getData(self,url,timeout=5,reconn_num=2,proxy_num=30):
         try:
             res=self.getData_inner(url,timeout=timeout)
             return res
@@ -384,7 +405,7 @@ class Connector():
         result=self.opener.open(req,timeout=timeout)
         return result.read().decode('utf-8')
 
-    def change_proxy(self,retry_time=3):
+    def change_proxy(self,retry_time=50):
         try:
             self.current_proxy_oj=self.proxy_pool.pop(0)
         except:
@@ -428,4 +449,10 @@ def info_manager(info_str,type='NORMAL'):
 if __name__=='__main__':
     p=Process(target=client,args=())
     p.start()
+    while True:
+        time.sleep(5)
+        if not p.is_alive():
+            p=Process(target=client,args=())
+            p.start()
+
 
