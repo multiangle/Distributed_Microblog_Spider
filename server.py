@@ -47,6 +47,7 @@ class Application(tornado.web.Application):
             (r'/task',TaskHandler),
             (r'/proxy_size',ProxySize),
             (r'/proxy_empty',ProxyEmpty)
+            (r'/proxy_return',ProxyReturn)
         ]
         settings=dict(
             debug=True
@@ -83,6 +84,7 @@ class ProxySize(tornado.web.RequestHandler):
     global proxy
     def get(self):
         self.write(str(proxy.size()))
+        self.finish()
 
 class ProxyEmpty(tornado.web.RequestHandler):
     global proxy
@@ -90,7 +92,15 @@ class ProxyEmpty(tornado.web.RequestHandler):
         proxy.empty()
         if proxy.size()<2:
             self.write('empty proxy success')
+            self.finish()
 
+class ProxyReturn(tornado.web.RequestHandler):
+    def post(self):
+        global  proxy
+        data=self.get_argument('data')
+        proxy_list=data.split(';')
+        in_data=[x.split(',') for x in proxy_list]
+        proxy.add(in_data)
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()
