@@ -245,6 +245,24 @@ class proxy_pool():
     def empty(self):        #清空proxy列表
         self.proxy=[]
 
+class keep_proxy_valid(threading.Thread):
+    def __init__(self,proxy_pool):
+        threading.Thread.__init__(self)
+        self.proxy_pool=proxy_pool
+
+    def run(self):
+        while True:
+            if self.proxy_pool.size()==0:
+                time.sleep(0.5)
+                continue
+            try:
+                c_proxy=self.proxy_pool.pop(0)
+            except:
+                time.sleep(0.5)
+                continue
+            url='http://m.weibo.cn/page/tpl?containerid=1005051221171697_-_FOLLOWERS&page=3'
+            #TODO 验证当前proxy能否连上指定页面
+
 def proxy_info_print(str_info,type='NORMAL'):     # decide if normal of key infomation should be print
     from server_config import PROXY_NORMAL_INFO_PRINT
     if type=='NORMAL':
