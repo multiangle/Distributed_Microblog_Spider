@@ -18,6 +18,7 @@ __author__ = 'multiangle'
 #----------------import package--------------------------
 # import python package
 import urllib.request as request
+import urllib.parse as parse
 from multiprocessing import Process
 import threading
 import time
@@ -29,6 +30,7 @@ import random
 
 # import from this folder
 import client_config as config
+import File_Interface as FI
 #=======================================================================
 
 #=======================================================================
@@ -38,7 +40,7 @@ class client():          # the main process of client
     def __init__(self):
         self.task_uid=None      #任务id
         self.task_type=None     #任务类型
-        self.check_server()     #检查是否能连上服务器
+        check_server()     #检查是否能连上服务器
         self.get_task()         #获取任务
         self.proxy_pool=[]
         self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
@@ -46,39 +48,32 @@ class client():          # the main process of client
 
     def run(self):      # main code of the process
         # 监控proxy pool,建议get_proxy_pool单独开一个线程，如果server立即返回则马上关闭，否则设为长连接
-        t=getInfo(self.proxy_pool,self.task_uid)
-        t.start()
+        getinfo_thread=getInfo(self.proxy_pool,self.task_uid)
+        getinfo_thread.start()
+        inner_count=0
         while True:
+            inner_count+=1
             time.sleep(0.1)
-            if self.proxy_pool.__len__()<int(config.PROXY_POOL_SIZE/2):
-                self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
-            if not t.is_alive():
+            if inner_count==20:                     # print the size of proxy pool
+                print('client->run: the size of proxy pool is ',self.proxy_pool.__len__())
+                inner_count=0
+            proxy_thread=get_proxy_pool_thread(self.proxy_pool,config.PROXY_POOL_SIZE)
+            if not proxy_thread.is_alive():         # maintain proxy pool
+                if self.proxy_pool.__len__()<int(config.PROXY_POOL_SIZE/2):
+                    err_str='client->run : request proxy from server'
+                    info_manager(err_str)
+                    proxy_thread=get_proxy_pool_thread(self.proxy_pool,config.PROXY_POOL_SIZE)
+                    proxy_thread.start()
+            # if self.proxy_pool.__len__()<int(config.PROXY_POOL_SIZE/2):
+            #     err_str='client->run : request proxy from server'
+            #     info_manager(err_str)
+            #     self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
+            if not getinfo_thread.is_alive():
+                self.return_proxy()
                 break
                 #TODO 此处有待斟酌，就是关于如何判断执行完线程方面
-                #TODO 此外，用完且有效的proxy需要返回，以节约proxy使用
 
-    def check_server(self):
-        """
-        check if server can provide service
-        if server is valid, will return 'connection valid'
-        """
-        url='{url}/auth'.format(url=config.SERVER_URL)
-        while True:
-            try:
-                res=request.urlopen(url,timeout=5).read()
-                res=str(res,encoding='utf8')
-                if 'connection valid' in res:
-                    break
-                else:
-                    error_str='error: client-> check_server :no auth to' \
-                              ' connect to server,exit process'
-                    info_manager(error_str,type='KEY')
-                    os._exit(0)
-            except Exception as e:
-                err_str='error:client->check_server:cannot connect to server; ' \
-                        'process sleeping'
-                info_manager(err_str,type='NORMAL')
-                time.sleep(1)       # sleep for 1 seconds
+
 
     def get_task(self):
         """
@@ -89,7 +84,7 @@ class client():          # the main process of client
             res=request.urlopen(url,timeout=10).read()
             res=str(res,encoding='utf8')
         except Exception as e:
-            self.check_server()     # sleep until server is available
+            check_server()     # sleep until server is available
             try:
                 res=request.urlopen(url,timeout=10).read()
                 res=str(res,encoding='utf8')
@@ -124,7 +119,7 @@ class client():          # the main process of client
             res=str(res,encoding='utf8')
         except:
             time.sleep(5)
-            self.check_server()     # sleep until server is available
+            check_server()     # sleep until server is available
             try:
                 res=request.urlopen(url,timeout=5).read()
                 res=str(res,encoding='utf8')
@@ -149,16 +144,95 @@ class client():          # the main process of client
             return
         proxy_pool[:]=proxy_pool[:]+data
 
+    def return_proxy(self):
+        """
+        return useful or unused proxy to server
+        """
+        check_server()
+        url='{url}/proxy_return'.format(url=config.SERVER_URL)
+        proxy_ret= [x.raw_data for x in self.proxy_pool]
+        proxy_str=''
+        for item in proxy_ret:
+            proxy_str=proxy_str+item
+        data={
+            'data':proxy_str
+        }
+        data=parse.urlencode(data).encode('utf-8')
+        try:
+            opener=request.build_opener()
+            req=request.Request(url,data)
+            res=opener.open(req).read().decode('utf-8')
+        except:
+            try:
+                opener=request.build_opener()
+                req=request.Request(url,data)
+                res=opener.open(req).read().decode('utf-8')
+            except:
+                err_str='error:client->return_proxy:unable to connect to server'
+                info_manager(err_str,type='KEY')
+                return
+        if 'return success' in res:
+            return
+        else:
+            err_str='error:client->return_proxy:'+res
+            info_manager(err_str,type='KEY')
+            # raise ConnectionError('Unable to return proxy')
+            return
+
+class get_proxy_pool_thread(threading.Thread):
+    def __init__(self,proxy_pool,num):
+        threading.Thread.__init__(self)
+        self.proxy_pool=proxy_pool
+        self.num=num
+
+    def run(self):
+        url='{url}/proxy/?num={num}'.format(url=config.SERVER_URL,num=self.num)
+        try:
+            res=request.urlopen(url,timeout=5).read()
+            res=str(res,encoding='utf8')
+        except:
+            time.sleep(5)
+            check_server()     # sleep until server is available
+            try:
+                res=request.urlopen(url,timeout=5).read()
+                res=str(res,encoding='utf8')
+            except Exception as e:
+                err_str='error: client -> get_proxy_pool : unable to connect ' \
+                        'to proxy server '
+                info_manager(err_str,type='KEY')
+                if config.KEY_INFO_PRINT:
+                    print(e)
+                return
+        if 'no valid proxy' in res:     # if server return no valid proxy, means server
+            # cannot provide proxy to this client
+            err_str='error: client -> get_proxy_pool : fail to get proxy from server'
+            info_manager(err_str,type='KEY')
+            return
+        try:
+            data=res.split(';')             # 'url,timedelay;url,timedelay;.....'
+            data=[proxy_object(x) for x in data]
+        except Exception as e:
+            err_str='error: client -> get_proxy_pool : fail to parse proxy str info:\r\n'+res
+            info_manager(err_str,type='KEY')
+            return
+        self.proxy_pool[:]=self.proxy_pool[:]+data
+
 class getInfo(threading.Thread):       # 用来处理第一类任务，获取用户信息和关注列表
 
     def __init__(self,proxy_pool,uid):
         threading.Thread.__init__(self)
         self.conn=Connector(proxy_pool,if_proxy=False)      #请求用户基本信息的时候会暂时关掉proxy
         self.uid=uid
-        time.sleep(max(0,random.gauss(1,0.2)))
+        self.proxy_pool=proxy_pool
+
+    def run(self):
+        time.sleep(max(0.1,random.gauss(1,0.2)))
         self.user_basic_info=self.getBasicInfo()
-        self.attends=self.getAttends(self.user_basic_info['container_id'],proxy_pool)
+        self.attends=self.getAttends(self.user_basic_info['container_id'],self.proxy_pool)
         # TODO 发送信息。注意检查是否需要将内容分批发送
+        FI.save_pickle(self.attends,'data.pkl')
+        string='Success: getInfo->run: get attends list, stored in data.pkl'
+        info_manager(string,type='KEY')
 
     def getBasicInfo(self):
         """
@@ -218,7 +292,7 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
         model_url='http://m.weibo.cn/page/tpl?containerid='+str(container_id)+'_-_FOLLOWERS&page={page}'
         page_num=int(attends_num/10)
         task_url=[model_url.format(page=(i+1)) for i in range(page_num)]
-        # TODO 可以得话，可以选择将task_url随机打乱一下顺序
+        random.shuffle(task_url)            # 对任务列表进行随机排序
         attends=[]
         threads_pool=[]                     #线程池
         for i in range(config.THREAD_NUM):  # thread initialization
@@ -240,8 +314,15 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                         all_stoped=False
                 if all_stoped:
                     break
-        # TODO 获得页面中肯定有重复的，需要去重，放入self.attends里面
-        return attends
+        attends_unique=[]
+        attends_uid=[]
+        for i in range(attends.__len__()):
+            if attends[i]['uid'] in attends_uid:
+                attends_uid.append(attends[i]['uid'])
+                attends_unique.append(attends[i])
+            else:
+                pass
+        return attends_unique
 
     class getAttends_subThread(threading.Thread):
         def __init__(self,task_url,proxy_pool,attends):
@@ -357,6 +438,29 @@ def card_group_item_parse(sub_block):
             user['fans_num']=temp
 
         return user
+
+def check_server():
+    """
+    check if server can provide service
+    if server is valid, will return 'connection valid'
+    """
+    url='{url}/auth'.format(url=config.SERVER_URL)
+    while True:
+        try:
+            res=request.urlopen(url,timeout=5).read()
+            res=str(res,encoding='utf8')
+            if 'connection valid' in res:
+                break
+            else:
+                error_str='error: client-> check_server :no auth to' \
+                          ' connect to server,exit process'
+                info_manager(error_str,type='KEY')
+                os._exit(0)
+        except Exception as e:
+            err_str='error:client->check_server:cannot connect to server; ' \
+                    'process sleeping'
+            info_manager(err_str,type='NORMAL')
+            time.sleep(1)       # sleep for 1 seconds
 
 class Connector():
     def __init__(self,proxy_pool,if_proxy=True):      #从proxy_pool队列中取出一个
