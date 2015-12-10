@@ -639,13 +639,15 @@ class Connector():
                     self.current_proxy_oj=self.proxy_pool.pop(0)
                     break
                 except:
-                    err_str='warn: Connector->change_proxy:re_try fail,ready to try again'
+                    err_str='warn: Connector->change_proxy:' \
+                            're_try fail,ready to try again'
                     info_manager(err_str,type='NORMAL')
                     re_try+=1
             if re_try==retry_time: raise ConnectionError('Unable to get proxy from proxy_pool')
         self.cj=http.cookiejar.CookieJar()
         self.proxy_handler=request.ProxyHandler({'http':self.current_proxy_oj.url})
-        self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj),self.proxy_handler)
+        self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj),
+                                         self.proxy_handler)
         request.install_opener(self.opener)
 
 class proxy_object():

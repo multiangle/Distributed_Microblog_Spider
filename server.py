@@ -37,6 +37,7 @@ from tornado.options import define,options
 from server_proxy import proxy_pool,proxy_manager
 import server_config as config
 import File_Interface as FI
+from DB_Interface import MySQL_Interface
 #=======================================================================
 define('port',default=8000,help='run on the given port',type=int)
 
@@ -47,8 +48,8 @@ class Application(tornado.web.Application):
             (r'/proxy/',ProxyHandler),
             (r'/task',TaskHandler),
             (r'/proxy_size',ProxySize),
-            (r'/proxy_empty',ProxyEmpty)
-            (r'/proxy_return',ProxyReturn)
+            (r'/proxy_empty',ProxyEmpty),
+            (r'/proxy_return',ProxyReturn),
             (r'/info_return',InfoReturn)
         ]
         settings=dict(
@@ -113,7 +114,31 @@ class InfoReturn(tornado.web.RequestHandler):
         try:
             user_basic_info=eval(user_basic_info)
             attends=eval(attends)
-            FI.save_pickle(attends,'server_data.pkl')
+
+            dbi=MySQL_Interface()
+
+            if attends.__len__()>0:           #store attends info
+                col_info=dbi.get_col_name('cache_attends')
+                keys=attends[0].keys()
+                attends= [[line[i] if i in keys else '' for i in col_info] for line in attends]
+                dbi.insert_asList('cache_attends',attends)
+            else:
+                pass
+
+            col_info=dbi.get_col_name('cache_user_info')    # store user basic info
+            keys=user_basic_info.keys()
+            data=[user_basic_info[i] if i in keys else '' for i in col_info]
+            dbi.insert_asList('cache_user_info',[data])
+
+            if attends.__len__()>0:            # store atten connection web
+                user_uid=user_basic_info['uid']
+                data=[[user_uid,x['uid']] for x in attends]
+                dbi.insert_asList('cache_atten_web',data)
+            else:
+                pass
+
+
+
             self.write('success to return user info')
             self.finish()
         except:

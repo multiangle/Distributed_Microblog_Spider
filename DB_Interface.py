@@ -14,8 +14,10 @@ class MySQL_Interface:
                 passwd=self.passwd,
                 host=self.host,
                 db=self.db,
+                charset='utf8mb4'
                 )
             self.cur=self.conn.cursor()
+
         except Exception as e:
             print("ERROR:faile to connect mysql")
             print(e)
@@ -195,6 +197,7 @@ class MySQL_Interface:
             p=self.code_transform(item,codec)
             out.append(p)
         return out
+
     def code_transform(self,strText,codec='gb2312'):
         b = bytes((ord(i) for i in strText))
         return b.decode(codec)
