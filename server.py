@@ -36,6 +36,7 @@ from tornado.options import define,options
 # import from this folder
 from server_proxy import proxy_pool,proxy_manager
 import server_config as config
+import File_Interface as FI
 #=======================================================================
 define('port',default=8000,help='run on the given port',type=int)
 
@@ -48,6 +49,7 @@ class Application(tornado.web.Application):
             (r'/proxy_size',ProxySize),
             (r'/proxy_empty',ProxyEmpty)
             (r'/proxy_return',ProxyReturn)
+            (r'/info_return',InfoReturn)
         ]
         settings=dict(
             debug=True
@@ -101,6 +103,22 @@ class ProxyReturn(tornado.web.RequestHandler):
         proxy_list=data.split(';')
         in_data=[x.split(',') for x in proxy_list]
         proxy.add(in_data)
+        self.write('return success')
+        self.finish()
+
+class InfoReturn(tornado.web.RequestHandler):
+    def post(self):
+        user_basic_info=self.get_argument('user_basic_info')
+        attends=self.get_argument('user_attends')
+        try:
+            user_basic_info=eval(user_basic_info)
+            attends=eval(attends)
+            FI.save_pickle(attends,'server_data.pkl')
+            self.write('success to return user info')
+            self.finish()
+        except:
+            self.write('fail to return user info')
+            self.finish()
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()
