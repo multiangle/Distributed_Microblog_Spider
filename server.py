@@ -137,8 +137,6 @@ class InfoReturn(tornado.web.RequestHandler):
             else:
                 pass
 
-
-
             self.write('success to return user info')
             self.finish()
         except:

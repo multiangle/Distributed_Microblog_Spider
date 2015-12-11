@@ -313,7 +313,7 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                     'Success to return user info to server'
             info_manager(suc_str,type='KEY')
         else:
-            FI.save_pickle(self.attends,'data.pkl')
+            FI.save_pickle(userInfo,'data.pkl')
             string='warn: getInfo->run: ' \
                    'get attends list, but unable to connect server,' \
                    'stored in data.pkl'
@@ -489,10 +489,12 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                         pass
 
 def card_group_item_parse(sub_block):
+
         """
         :param user_block   : json type
         :return:  user      : dict type
         """
+
         user_block=sub_block['user']
         user_block_keys=user_block.keys()
         user={}
