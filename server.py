@@ -109,39 +109,67 @@ class ProxyReturn(tornado.web.RequestHandler):
 
 class InfoReturn(tornado.web.RequestHandler):
     def post(self):
-        user_basic_info=self.get_argument('user_basic_info')
-        attends=self.get_argument('user_attends')
+
         try:
+
+            user_basic_info=self.get_argument('user_basic_info')
+            attends=self.get_argument('user_attends')
             user_basic_info=eval(user_basic_info)
             attends=eval(attends)
-
-            dbi=MySQL_Interface()
-
-            if attends.__len__()>0:           #store attends info
-                col_info=dbi.get_col_name('cache_attends')
-                keys=attends[0].keys()
-                attends= [[line[i] if i in keys else '' for i in col_info] for line in attends]
-                dbi.insert_asList('cache_attends',attends)
-            else:
-                pass
-
-            col_info=dbi.get_col_name('cache_user_info')    # store user basic info
-            keys=user_basic_info.keys()
-            data=[user_basic_info[i] if i in keys else '' for i in col_info]
-            dbi.insert_asList('cache_user_info',[data])
-
-            if attends.__len__()>0:            # store atten connection web
-                user_uid=user_basic_info['uid']
-                data=[[user_uid,x['uid']] for x in attends]
-                dbi.insert_asList('cache_atten_web',data)
-            else:
-                pass
-
             self.write('success to return user info')
             self.finish()
         except:
             self.write('fail to return user info')
             self.finish()
+            return
+
+        try:
+            dbi=MySQL_Interface()
+            if attends.__len__()>0:           #store attends info
+                attends_col_info=dbi.get_col_name('cache_attends')
+                keys=attends[0].keys()
+                attends= [[line[i] if i in keys else '' for i in attends_col_info] for line in attends]
+                dbi.insert_asList('cache_attends',attends)
+                print('Success : attends of {uid} is stored in cache_attends'
+                      .format(uid=user_basic_info['uid']))
+            else:
+                pass
+        except Exception as e:
+            print(e)
+            path="temp\\{uid}_attends.pkl".format(uid=user_basic_info['uid'])
+            print('unable to store attends of {uid}, it will be stored '
+                  .format(uid=user_basic_info['uid']))
+            FI.save_pickle(attends,path)
+
+        try:
+            col_info=dbi.get_col_name('cache_user_info')    # store user basic info
+            keys=user_basic_info.keys()
+            data=[user_basic_info[i] if i in keys else '' for i in col_info]
+            dbi.insert_asList('cache_user_info',[data])
+            print('Success : basic info of {uid} is stored in cache_user_info'
+                  .format(uid=user_basic_info['uid']))
+        except Exception as e:
+            print(e)
+            path='temp\\{uid}_basic_info.pkl'.format(uid=user_basic_info['uid'])
+            print('unable to store basic info of {uid} , it will be stored'
+                  .format(uid=user_basic_info['uid']))
+            FI.save_pickle(user_basic_info,path)
+
+        try:
+            if attends.__len__()>0:            # store atten connection web
+                user_uid=user_basic_info['uid']
+                data=[[user_uid,str(x[attends_col_info.index('uid')])]for x in attends]
+                dbi.insert_asList('cache_atten_web',data)
+                print('Success : conn web of {uid} is stored in cache_atten_web'
+                      .format(uid=user_basic_info['uid']))
+            else:
+                pass
+        except Exception as e:
+            print(e)
+            path='{uid}_atten_web.pkl'.format(uid=user_basic_info['uid'])
+            print('unable to store atten web of {uid} , it will be stored'
+                  .format(uid=user_basic_info['uid']))
+            FI.save_pickle(data,path)
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()

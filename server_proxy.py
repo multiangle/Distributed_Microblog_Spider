@@ -61,6 +61,9 @@ class proxy_manager(threading.Thread):
             raise ValueError('the length of run_value is not equal to '
                              'MAX_VALID_PROXY_THREAD_NUM')
 
+        maintain_proxy_thread=keep_proxy_valid(self.proxy_pool)
+        maintain_proxy_thread.start()
+
         while (True):
             time.sleep(0.1)
             for i in range(thread_pool.__len__()):
@@ -68,7 +71,9 @@ class proxy_manager(threading.Thread):
                     if self.proxy_pool.size()<=run_value[i]:
                         thread_pool[i]=find_valid_proxy(self.proxy_pool,self.proxy_lock)
                         thread_pool[i].start()
-
+            if not maintain_proxy_thread.is_alive():
+                maintain_proxy_thread=keep_proxy_valid(self.proxy_pool)
+                maintain_proxy_thread.start()
 
 class find_valid_proxy(threading.Thread):
     """
@@ -104,6 +109,8 @@ class find_valid_proxy(threading.Thread):
             if self.raw_proxy.__len__()<fetch_size:
                 print('*** warning: find_valid_proxy -> get_raw_proxy: '
                       'the proxy num got from web is not enough')
+            else:
+                print('get {num} proxy from website'.format(num=fetch_size))
         except Exception as e:
             print('error: find_valid_proxy -> get_raw_proxy: ',e)
             # if can't get proxy ,sleep for 1 sec , then try again
@@ -153,7 +160,8 @@ class check_proxy(threading.Thread):
 
     def getData(self,url,timeout=10):
         headers= {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
-                                'AppleWebKit/600.1.3 (KHTML, like Gecko) Version/8.0 Mobile/12A4345d Safari/600.1.4'}
+                                'AppleWebKit/600.1.3 (KHTML, like Gecko) '
+                                'Version/8.0 Mobile/12A4345d Safari/600.1.4'}
         req=request.Request(url,headers=headers)
         result=self.opener.open(req,timeout=timeout)
         return result.read().decode('utf-8')
@@ -237,13 +245,26 @@ class proxy_pool():
         self.proxy=self.proxy+data
 
     def size(self):
+
         return self.proxy.__len__()
+
+    def insert(self,single_data):
+        """
+        Data Formation: each item be formation of
+                [ip:port(str),timedelay(float)] and so on
+        """
+        self.proxy.insert(0,single_data)
 
     def sort(self):         # sort according to the timedelay
         pass
         #TODO
     def empty(self):        #清空proxy列表
         self.proxy=[]
+
+    def pop(self):
+        if self.proxy.__len__()==0:
+            return []
+        return self.proxy.pop()
 
 class keep_proxy_valid(threading.Thread):
     def __init__(self,proxy_pool):
@@ -256,12 +277,90 @@ class keep_proxy_valid(threading.Thread):
                 time.sleep(0.5)
                 continue
             try:
-                c_proxy=self.proxy_pool.pop(0)
+                c_proxy=self.proxy_pool.pop()[0]
             except:
                 time.sleep(0.5)
                 continue
+            # url='http://m.sina.cn/'
             url='http://m.weibo.cn/page/tpl?containerid=1005051221171697_-_FOLLOWERS&page=3'
-            #TODO 验证当前proxy能否连上指定页面
+            handler=request.ProxyHandler({'http':'http://%s'%(c_proxy)})
+            t_start=time.time()
+            try:
+                page=self.getData(url,handler,timeout=5)
+                page=re.findall(r'"card_group":.+?]}]',page)[0]
+                page='{'+page[:page.__len__()-1]
+                page=json.loads(page)
+                temp_list=[self.card_group_item_parse(x) for x in page['card_group']]
+                usetime=time.time()-t_start
+                self.proxy_pool.insert([c_proxy,usetime])
+                print('proxy {proxy} is valid, insert it'.format(proxy=c_proxy))
+            except Exception as e:
+                print(e)
+                print('proxy {proxy} is invalid ,drop it'.format(proxy=c_proxy))
+
+    def getData(self,url,handler,timeout=10):
+        headers= {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
+                                'AppleWebKit/600.1.3 (KHTML, like Gecko) '
+                                'Version/8.0 Mobile/12A4345d Safari/600.1.4'}
+        req=request.Request(url,headers=headers)
+        opener=request.build_opener(handler)
+        page=opener.open(req,timeout=timeout)
+        return page.read().decode('utf-8')
+
+    def card_group_item_parse(self,sub_block):
+        """
+        :param user_block   : json type
+        :return:  user      : dict type
+        """
+        user_block=sub_block['user']
+        user_block_keys=user_block.keys()
+        user={}
+
+        if 'profile_url' in user_block_keys:
+            user['basic_page']=user_block['profile_url']
+
+        if 'screen_name' in user_block_keys:
+            user['name']=user_block['screen_name']
+
+        if 'desc2' in user_block_keys:
+            user['recent_update_time']=user_block['desc2']
+
+        if 'desc1' in user_block_keys:
+            user['recent_update_content']=user_block['desc1']
+
+        if 'gender' in user_block_keys:
+            user['gender']=('male' if user_block['gender']=='m' else 'female')
+
+        if 'verified_reason' in user_block_keys:
+            user['verified_reason']=user_block['verified_reason']
+
+        if 'profile_image_url' in user_block_keys:
+            user['profile']=user_block['profile_image_url']
+
+        if 'statuses_count' in user_block_keys:
+            temp=user_block['statuses_count']
+            if isinstance(temp,str):
+                temp=int(temp.replace('万','0000'))
+            user['blog_num']=temp
+
+        if 'description' in user_block_keys:
+            user['description']=user_block['description']
+
+        if 'follow_me' in user_block_keys:
+            user['follow_me']=user_block['follow_me']
+
+        if 'id' in user_block_keys:
+            user['uid']=user_block['id']
+
+        if 'fansNum' in user_block_keys:
+            temp=user_block['fansNum']
+            if isinstance(temp,str):
+                temp=int(temp.replace('万','0000'))
+            user['fans_num']=temp
+
+        return user
+
+
 
 def proxy_info_print(str_info,type='NORMAL'):     # decide if normal of key infomation should be print
     from server_config import PROXY_NORMAL_INFO_PRINT

@@ -64,7 +64,8 @@ class client():          # the main process of client
                       self.proxy_pool.__len__())
                 inner_count=0
 
-            # proxy_thread=get_proxy_pool_thread(self.proxy_pool,config.PROXY_POOL_SIZE)
+            proxy_thread=get_proxy_pool_thread(self.proxy_pool,config.PROXY_POOL_SIZE)
+
             # if not proxy_thread.is_alive():         # maintain proxy pool
             #     if self.proxy_pool.__len__()<int(config.PROXY_POOL_SIZE/2):
             #         err_str='client->run : request proxy from server'
@@ -81,8 +82,6 @@ class client():          # the main process of client
                 self.return_proxy()
                 break
                 #TODO 此处有待斟酌，就是关于如何判断执行完线程方面
-
-
 
     def get_task(self):
 
@@ -155,6 +154,7 @@ class client():          # the main process of client
             err_str='error: client -> get_proxy_pool : fail to ' \
                     'get proxy from server'
             info_manager(err_str,type='KEY')
+            time.sleep(1)
             return
 
         try:
@@ -229,8 +229,8 @@ class get_proxy_pool_thread(threading.Thread):
                 res=request.urlopen(url,timeout=5).read()
                 res=str(res,encoding='utf8')
             except Exception as e:
-                err_str='error: client -> get_proxy_pool : unable to ' \
-                        'connect to proxy server '
+                err_str='error: get_proxy_pool_thread -> run : ' \
+                        'unable to connect to proxy server '
                 info_manager(err_str,type='KEY')
                 if config.KEY_INFO_PRINT:
                     print(e)
@@ -241,6 +241,7 @@ class get_proxy_pool_thread(threading.Thread):
             err_str='error: client -> get_proxy_pool : fail to ' \
                     'get proxy from server'
             info_manager(err_str,type='KEY')
+            time.sleep(1)
             return
 
         try:
@@ -438,7 +439,8 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                 except Exception as e:
                     print('error:getAttends_subThread->run: '
                           'fail to get page'+url)
-                    print('skip this page')
+                    print('return this page')
+                    self.task_url.append(url)
                     continue
                 page='{\"data\":['+page[1:]+'}'
                 try:
@@ -475,7 +477,7 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                                 temp_list=[card_group_item_parse(x) for x in page['card_group']]
                                 self.attends[:]=self.attends[:]+temp_list
                                 info_str='Success: Page {url} is done'.format(url=url)
-                                info_manager(info_str,type='NORMAL')
+                                info_manager(info_str,type='KEY')
                             except:
                                 print(e)
                                 pass    #如果再次失败，当前措施是直接跳过
@@ -567,7 +569,7 @@ def check_server():
             err_str='error:client->check_server:cannot ' \
                     'connect to server; process sleeping'
             info_manager(err_str,type='NORMAL')
-            time.sleep(1)       # sleep for 1 seconds
+            time.sleep(5)       # sleep for 1 seconds
 
 class Connector():
     def __init__(self,proxy_pool,if_proxy=True):      #从proxy_pool队列中取出一个
@@ -576,6 +578,7 @@ class Connector():
                                        '/12A4345d Safari/600.1.4'}
         self.proxy_pool=proxy_pool
         self.cj=http.cookiejar.CookieJar()
+        self.if_proxy=if_proxy
 
         if if_proxy :
             counting=0
@@ -592,14 +595,14 @@ class Connector():
                         raise ConnectionError('unable to get proxy')
 
             self.proxy_handler=request.ProxyHandler({'http':self.current_proxy_oj.url})
-            self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj),self.proxy_handler)
-            # self.opener=request.build_opener(self.proxy_handler)
+            # self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj),self.proxy_handler)
+            self.opener=request.build_opener(self.proxy_handler)
         else:
             self.current_proxy_oj=None
             self.opener=request.build_opener(request.HTTPCookieProcessor(self.cj))
         request.install_opener(self.opener)
 
-    def getData(self,url,timeout=5,reconn_num=2,proxy_num=30):
+    def getData(self,url,timeout=10,reconn_num=2,proxy_num=30):
         try:
             res=self.getData_inner(url,timeout=timeout)
             return res
@@ -611,6 +614,7 @@ class Connector():
             while(proxy_count<=proxy_num):
                 reconn_count=1
                 while(reconn_count<=reconn_num):
+                    time.sleep(max(random.gauss(2,0.5),0.5))
                     err_str='warn: Connector->getData:the {num}th reconnect  '.format(num=reconn_count)
                     info_manager(err_str,type='NORMAL')
                     try:
@@ -626,14 +630,23 @@ class Connector():
             raise ConnectionError('run out of reconn and proxy times')
 
     def getData_inner(self,url,timeout=10):
+        # if self.if_proxy:
+        #     opener=request.build_opener(request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+        #                                 request.ProxyHandler({'http':self.current_proxy_oj.url}))
+        # else:
+        #     opener=request.build_opener(request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+
         req=request.Request(url,headers=self.headers)
+        # request.install_opener(opener)
         result=self.opener.open(req,timeout=timeout)
+        # result=opener.open(req,timeout=timeout)
         return result.read().decode('utf-8')
 
     def change_proxy(self,retry_time=50):
         try:
             self.current_proxy_oj=self.proxy_pool.pop(0)
-        except:
+        except Exception as e:
+            print(e)
             re_try=1
             while(re_try<retry_time):
                 time.sleep(5)
@@ -642,7 +655,9 @@ class Connector():
                     break
                 except:
                     err_str='warn: Connector->change_proxy:' \
-                            're_try fail,ready to try again'
+                            're_try fail,ready to try again' \
+                            ' size of proxy pool is {num}'\
+                        .format(num=self.proxy_pool.size())
                     info_manager(err_str,type='NORMAL')
                     re_try+=1
             if re_try==retry_time: raise ConnectionError('Unable to get proxy from proxy_pool')
