@@ -439,8 +439,8 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                 except Exception as e:
                     print('error:getAttends_subThread->run: '
                           'fail to get page'+url)
-                    print('return this page')
-                    self.task_url.append(url)
+                    print('skip this page')
+                    # self.task_url.append(url)
                     continue
                 page='{\"data\":['+page[1:]+'}'
                 try:

@@ -159,6 +159,13 @@ class MySQL_Interface:
         except Exception as e:
             print('fail to update content ', e)
 
+    def update_asQuery(self,query):
+        try:
+            self.cur.execute(query)
+            self.conn.commit()
+        except Exception as e:
+            print('Unable to update conent',e)
+
     # def update_content_asList(self,table_name,param_list):
     #     query="update %s set %s=%s where %s=%s ;"
     #     try:
@@ -167,7 +174,7 @@ class MySQL_Interface:
     #     except Exception as e:
     #         print(e)
 
-    def insert_asList(self,table_name,data_list):
+    def insert_asList(self,table_name,data_list,unique=False):
         if data_list.__len__()==0: #check the length of data list
             print('the length of data is 0')
             return -1
@@ -181,7 +188,10 @@ class MySQL_Interface:
         if isinstance(data_list[0],list):
             #check if the data type in [[]..[]] transform to [()..()]
             data_list=[tuple(x) for x in data_list]
-        q1="insert into %s values ("%(table_name)
+        if unique:
+            q1="insert ignore into %s values ("%(table_name)
+        else:
+            q1="insert into %s values ("%(table_name)
         q2="%s,"*(data_list[0].__len__()-1)+"%s)"
         query=q1+q2
         try:
@@ -189,6 +199,19 @@ class MySQL_Interface:
             self.conn.commit()
         except Exception as e:
             print("fail to insert data", e)
+
+    def insert_asQuery(self,query):
+        try:
+            self.cur.execute(query)
+            self.conn.commit()
+        except Exception as e:
+            print('fail to insert as query,',e)
+
+    def delete_line(self,table_name,col_name,col_value):
+        query="delete from {table_name} where {col}=\'{col_value}\'"\
+            .format(table_name=table_name,col=col_name,col_value=col_value)
+        self.cur.execute(query)
+        self.conn.commit()
 
     def list_code_transform(self,strlist,codec='gb2312'):
         # len=strlist.__len__()
@@ -202,7 +225,13 @@ class MySQL_Interface:
         b = bytes((ord(i) for i in strText))
         return b.decode(codec)
 
-
+    def is_empty(self,table_name):
+        query='select * from {tname} limit 1 ;'.format(tname=table_name)
+        res=self.select_asQuery(query)
+        if res.__len__()==0:
+            return True
+        else:
+            return False
 
 if __name__=='__main__':
     mi=MySQL_Interface(dbname='test')

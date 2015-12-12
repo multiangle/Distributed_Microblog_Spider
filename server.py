@@ -26,6 +26,7 @@ __author__ = 'multiangle'
 #----------------import package--------------------------
 # import python package
 import threading
+import time
 
 # import from outer package
 import tornado.web
@@ -36,8 +37,10 @@ from tornado.options import define,options
 # import from this folder
 from server_proxy import proxy_pool,proxy_manager
 import server_config as config
+from server_database import DB_manager
 import File_Interface as FI
 from DB_Interface import MySQL_Interface
+
 #=======================================================================
 define('port',default=8000,help='run on the given port',type=int)
 
@@ -80,8 +83,24 @@ class ProxyHandler(tornado.web.RequestHandler):
 
 class TaskHandler(tornado.web.RequestHandler):
     def get(self):
-        self.write('1221171697,connect')
+        dbi=MySQL_Interface()
+        query='select * from ready_to_get where is_fetching is null order by fans_num desc limit 1;'
+        res=dbi.select_asQuery(query)
+        if res.__len__()==0:
+            self.write('no task')
+            self.finish()
+            return
+        res=res[0]
+        col_info=dbi.get_col_name('ready_to_get')
+        uid=res[col_info.index('uid')]
+
+        self.write('{uid},connect'.format(uid=uid))
         self.finish()
+
+        time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+        query="update ready_to_get set is_fetching=\'{t_time}\' where uid={uid} ;"\
+            .format(t_time=time_stick,uid=uid)
+        dbi.update_asQuery(query)
 
 class ProxySize(tornado.web.RequestHandler):
     global proxy
@@ -111,7 +130,6 @@ class InfoReturn(tornado.web.RequestHandler):
     def post(self):
 
         try:
-
             user_basic_info=self.get_argument('user_basic_info')
             attends=self.get_argument('user_attends')
             user_basic_info=eval(user_basic_info)
@@ -125,13 +143,18 @@ class InfoReturn(tornado.web.RequestHandler):
 
         try:
             dbi=MySQL_Interface()
+        except:
+            print('unable to connect to MySql DB')
+
+        try:
             if attends.__len__()>0:           #store attends info
-                attends_col_info=dbi.get_col_name('cache_attends')
+                table_name='cache_attends'
+                attends_col_info=dbi.get_col_name(table_name)
                 keys=attends[0].keys()
                 attends= [[line[i] if i in keys else '' for i in attends_col_info] for line in attends]
-                dbi.insert_asList('cache_attends',attends)
-                print('Success : attends of {uid} is stored in cache_attends'
-                      .format(uid=user_basic_info['uid']))
+                dbi.insert_asList(table_name,attends,unique=True)
+                print('Success : attends of {uid} is stored in {tname}'
+                      .format(uid=user_basic_info['uid'],tname=table_name))
             else:
                 pass
         except Exception as e:
@@ -145,7 +168,7 @@ class InfoReturn(tornado.web.RequestHandler):
             col_info=dbi.get_col_name('cache_user_info')    # store user basic info
             keys=user_basic_info.keys()
             data=[user_basic_info[i] if i in keys else '' for i in col_info]
-            dbi.insert_asList('cache_user_info',[data])
+            dbi.insert_asList('cache_user_info',[data],unique=True)
             print('Success : basic info of {uid} is stored in cache_user_info'
                   .format(uid=user_basic_info['uid']))
         except Exception as e:
@@ -172,12 +195,15 @@ class InfoReturn(tornado.web.RequestHandler):
             FI.save_pickle(data,path)
 
 if __name__=='__main__':
-    proxy_lock=threading.Lock()
+    proxy_lock=threading.Lock()         # proxy thread
     global proxy
     proxy=proxy_pool()
     pm=proxy_manager(proxy,proxy_lock)
     pm.start()
 
-    tornado.options.parse_command_line()
+    db_thread=DB_manager()              # database thread
+    db_thread.start()
+
+    tornado.options.parse_command_line()    # tornado thread
     Application().listen(options.port)
     tornado.ioloop.IOLoop.instance().start()

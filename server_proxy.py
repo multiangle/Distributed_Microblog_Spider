@@ -242,7 +242,7 @@ class proxy_pool():
                         [[ip:port(str),timedelay(float)],[ip:port(str),timedelay(float)]]
                         and so on
         """
-        self.proxy=self.proxy+data
+        self.proxy=data+self.proxy
 
     def size(self):
 
