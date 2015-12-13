@@ -8,7 +8,7 @@ __author__ = 'multiangle'
 #========================================================
 
 # 全局参数              global config info
-PROCESS_NUM             =1                #进程数目           number of process
+PROCESS_NUM             =3                #进程数目           number of process
 THREAD_NUM              =10                #每个进程最多线程   max thread num per process
 NOMAL_INFO_PRINT        =True            #普通信息显示       if print normal information
 KEY_INFO_PRINT          =True            #关键信息显示       if print key information
@@ -24,7 +24,7 @@ PROXY_POOL_SIZE         =THREAD_NUM*2     #每个进程维持的代理池的大�
 
 ####-------------------------------------####
 
-SERVER_URL='http://multiangle.imwork.net:11420' #服务器地址,端口号
+SERVER_URL='http://multiangle.imwork.net:10407' #服务器地址,端口号
 # SERVER_URL='http://121.42.163.195:8000'
 # SERVER_URL='http://127.0.0.1:8000' #服务器地址,端口号
 

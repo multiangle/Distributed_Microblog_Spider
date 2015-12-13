@@ -692,12 +692,18 @@ def info_manager(info_str,type='NORMAL'):
             print(str)
 
 if __name__=='__main__':
-    p=Process(target=client,args=())
-    p.start()
+    p_pool=[]
+    for i in range(config.PROCESS_NUM):
+        p=Process(target=client,args=())
+        p_pool.append(p)
+    for p in p_pool:
+        p.start()
+
     while True:
         time.sleep(5)
-        if not p.is_alive():
-            p=Process(target=client,args=())
-            p.start()
+        for i in range(p_pool.__len__()):
+            if not p_pool[i].is_alive():
+                p_pool[i]=Process(target=client,args=())
+                p_pool[i].start()
 
 
