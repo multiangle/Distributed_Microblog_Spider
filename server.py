@@ -37,7 +37,7 @@ from tornado.options import define,options
 # import from this folder
 from server_proxy import proxy_pool,proxy_manager
 import server_config as config
-from server_database import DB_manager
+from server_database import DB_manager,deal_cache_user_info,deal_cache_attends
 import File_Interface as FI
 from DB_Interface import MySQL_Interface
 
@@ -180,8 +180,10 @@ class InfoReturn(tornado.web.RequestHandler):
 
         try:
             if attends.__len__()>0:            # store atten connection web
-                user_uid=user_basic_info['uid']
-                data=[[user_uid,str(x[attends_col_info.index('uid')])]for x in attends]
+                from_uid=user_basic_info['uid']
+                from_fans_num=user_basic_info['fans_num']
+                from_blog_num=user_basic_info['blog_num']
+                data=[[from_uid,from_fans_num,from_blog_num,str(x[attends_col_info.index('uid')]),str(x[attends_col_info.index('fans_num')]),str(x[attends_col_info.index('blog_num')])]for x in attends]
                 dbi.insert_asList('cache_atten_web',data)
                 print('Success : conn web of {uid} is stored in cache_atten_web'
                       .format(uid=user_basic_info['uid']))

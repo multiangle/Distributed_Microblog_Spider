@@ -203,6 +203,7 @@ class client():          # the main process of client
                 return
 
         if 'return success' in res:
+            print('Success: return proxy to server')
             return
         else:
             err_str='error:client->return_proxy:'+res
@@ -321,6 +322,8 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
             info_manager(string,type='KEY')
 
         #TODO 注意是否要将信息分开发送
+        os._exit(0)
+
 
     def getBasicInfo(self):
         """
@@ -435,7 +438,7 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                     page=self.conn.getData(url,
                                            timeout=5,
                                            reconn_num=1,
-                                           proxy_num=30)
+                                           proxy_num=15)
                 except Exception as e:
                     print('error:getAttends_subThread->run: '
                           'fail to get page'+url)
