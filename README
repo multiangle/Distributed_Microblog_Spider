@@ -1,0 +1,25 @@
+=========================================================================================================
+The component and details of the project(__edition_0.1_)
+---------------------------------------------------------------------------------------------------------
+This is a Sina Weibo Spider archieved by server terminal and client terminal.
+The Server terminal mainly deal with 3 tasks.
+
+    1.      Get proxy from http proxy website. Unfortunately, not all proxy scratched from website
+        is valid. In fact, almost one quarter of them is valid. So, it is important to check if
+        those proxy is valid. One thread of server will manage a proxy pool.
+            Raw and unchecked proxy will scratched from website, and this thread will arrange these
+        raw proxy to several sub thread, each sub thread will check if the arranged proxy is
+        valid. If so, these proxy will be sent to valid proxy pool and ready for use.
+            Besides, the valid proxy may extend after some time. So it is necessary to check if the
+        proxy in proxy pool is valid.
+
+    2.      The second part is communicating with clients. Clients will require proxy and task from
+        server. While client finish the task of getting info of users, they will return the user info
+        to server. When received this user info , server will store then in cache database.
+
+    3.      The 3rd part of function is dealing with the data in cache databases. The attends of user
+        will be checked if already exist in user_info_table. If not, the user will be inserted into
+        user_info_table. And no matter whether it exists, the user will be deleted from ready_to_get
+        table. And ,as for attends, if they are not contained in user_info_table, they will be inserted
+        to ready_to_get table.
+==========================================================================================================
