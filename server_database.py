@@ -16,11 +16,12 @@ __author__ = 'multiangle'
     4. Check the ready_to_get table . if some uid is fetching for too much time, set
     the value if is_fetching to null
     -----------------------------------------------------------------------
-    VERSION:    _0.1_
+    VERSION:    _0.1.1_
     UPDATE_HISTORY:
+        _0.1.1: add redis and bloom filter as the cache of mysql
         _0.1_:  The 1st edition
 """
-# TODO 第三个功能还未实现 。其中 关系表 可以加上粉丝数，博客数
+# TODO 第三个功能还未实现 。
 #======================================================================
 #----------------import package--------------------------
 # import python package
@@ -29,6 +30,7 @@ import urllib.parse as parse
 from multiprocessing import Process
 import threading
 import time
+import redis
 import os
 import json
 import http.cookiejar
@@ -48,36 +50,44 @@ class deal_cache_attends(threading.Thread):
         threading.Thread.__init__(self)
         dbi=MySQL_Interface()
         self.dbi=dbi
+        self.bf=BloomFilter()
+
 
     def  run(self):
         bag=[]
-        bag_size=100             #十次插入一次
+        uid_bag=[]              #与bag类似，只不过存储uid
+        bag_size=100             #100次插入一次
+        ready_to_get_col=self.dbi.get_col_name('ready_to_get')
+        cache_attends_col=self.dbi.get_col_name('cache_attends')
         while True:
-            query='select * from cache_attends limit 1'
+            query='select * from cache_attends limit 10'
             res=self.dbi.select_asQuery(query)
             if res.__len__()==0:
                 if bag.__len__()>0:
                     self.dbi.insert_asList('ready_to_get',bag,unique=True)
                     bag=[]
+                    self.bf.insert_asList(uid_bag,'ready_to_get')
+                    uid_bag=[]
                 time.sleep(1)
-                self.dbi=MySQL_Interface()
+                self.dbi=MySQL_Interface()  #更新dbi
                 continue
-            print('thread cache attends is working')
-            cache_attends_col=self.dbi.get_col_name('cache_attends')
-            uid=res[0][cache_attends_col.index('uid')]
 
-            in_user_info=self.isInUserInfo(uid)     #检查是否在 user info table中
-            if not in_user_info:
-                ready_to_get_col=self.dbi.get_col_name('ready_to_get')
-                data= [[line[cache_attends_col.index(col)] if col in cache_attends_col else None for col in ready_to_get_col]for line in res]
-                self.dbi.delete_line('cache_attends','uid',uid)     #删除 cache attends 中相关项
-                bag+=data
-                if bag.__len__()>bag_size:
-                    self.dbi.insert_asList('ready_to_get',bag,unique=True)  # 插入 ready to get 表中
-                    bag=[]
-                    print('insert once')
-            else:
-                self.dbi.delete_line('cache_attends','uid',uid)     #删除 cache attends 相关项
+            print('thread cache attends is working')
+
+            for line in res:
+                raw_id=line[cache_attends_col.index('uid')]
+                in_user_info=self.bf.isContains(raw_id,'user_info_table')   #此处可优化
+                if not in_user_info:
+                    data=[line[cache_attends_col.index(col)] if col in cache_attends_col else None for col in ready_to_get_col]
+                    bag.append(data)
+                    uid_bag.append(raw_id)
+                    if bag.__len__()>bag_size:
+                        self.dbi.insert_asList('ready_to_get',bag,unique=True)
+                        self.bf.insert_asList(uid_bag,'ready_to_get')
+                        print('insert once')
+                        bag=[]
+                        uid_bag=[]
+                self.dbi.delete_line('cache_attends','uid',raw_id) # 此处可优化
 
     def isInUserInfo(self,in_uid):
         col_user_info=self.dbi.get_col_name('user_info_table')
@@ -92,6 +102,7 @@ class deal_cache_user_info(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
         self.dbi=MySQL_Interface()
+        self.bf=BloomFilter()
 
     def run(self):
         while True:
@@ -167,6 +178,45 @@ class DB_manager(threading.Thread):
                 self.p3.start()
                 print('Process: deal_fetching_user is restarted')
 
+
+class SimpleHash():
+    def __init__(self,cap,seed):
+        self.cap=cap
+        self.seed=seed
+    def hash(self,value):
+        ret=0
+        for i in range(value.__len__()):
+            ret+=self.seed*ret+ord(value[i])
+        return ((self.cap-1) & ret)
+
+class BloomFilter():
+    def __init__(self):
+        self.bit_size=1<<25
+        self.seeds=[5,7,11,13,31,37,61]
+        self.r=redis.StrictRedis(host='127.0.0.1',port=6379,db=0)
+        self.hashFunc=[]
+        for i in range(self.seeds.__len__()):
+            self.hashFunc.append(SimpleHash(self.bit_size,self.seeds[i]))
+
+    def isContains(self,str_input,name):
+        if str_input==None:
+            return False
+        if str_input.__len__()==0:
+            return False
+        ret=True
+        for f in self.hashFunc:
+            loc=f.hash(str_input)
+            ret=ret & self.r.getbit(name,loc)
+        return ret
+
+    def insert(self,str_input,name):
+        for f in self.hashFunc:
+            loc=f.hash(str_input)
+            self.r.setbit(name,loc,1)
+
+    def insert_asList(self,list_input,name):
+        for line in list_input:
+            self.insert(line,name)
 
 if __name__=='__main__':
     db_thread=DB_manager()              # database thread

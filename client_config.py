@@ -24,9 +24,9 @@ PROXY_POOL_SIZE         =THREAD_NUM*2     #每个进程维持的代理池的大�
 
 ####-------------------------------------####
 
-SERVER_URL='http://multiangle.imwork.net:10407' #服务器地址,端口号
+# SERVER_URL='http://multiangle.imwork.net:10407' #服务器地址,端口号
 # SERVER_URL='http://121.42.163.195:8000'
-# SERVER_URL='http://127.0.0.1:8000' #服务器地址,端口号
+SERVER_URL='http://127.0.0.1:8000' #服务器地址,端口号
 
 
 
