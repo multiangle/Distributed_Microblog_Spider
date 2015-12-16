@@ -167,7 +167,7 @@ class InfoReturn(tornado.web.RequestHandler):
         try:
             atten_num_real=user_basic_info['attends_num']
             atten_num_get=attends.__len__()
-            user_basic_info['accuracy']=atten_num_get/atten_num_real    # 加入精准度，查看有多少跳过的
+            user_basic_info['accuracy']=atten_num_get       # 实际获取到的关注数目
             col_info=dbi.get_col_name('cache_user_info')    # store user basic info
             keys=user_basic_info.keys()
             data=[user_basic_info[i] if i in keys else '' for i in col_info]

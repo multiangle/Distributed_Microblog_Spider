@@ -79,9 +79,9 @@ class client():          # the main process of client
                 self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
 
             if not getinfo_thread.is_alive():
-                self.return_proxy()
+                # self.return_proxy()
                 break
-                #TODO 此处有待斟酌，就是关于如何判断执行完线程方面
+
 
     def get_task(self):
 
@@ -321,9 +321,52 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                    'stored in data.pkl'
             info_manager(string,type='KEY')
 
-        #TODO 注意是否要将信息分开发送
+        # self.return_proxy()
+        #注意是否要将信息分开发送
         os._exit(0)
 
+    def return_proxy(self):
+
+        """
+        return useful or unused proxy to server
+        """
+
+        check_server()
+        url='{url}/proxy_return'.format(url=config.SERVER_URL)
+        proxy_ret= [x.raw_data for x in self.proxy_pool]
+        proxy_str=''
+
+        for item in proxy_ret:
+            proxy_str=proxy_str+item
+        data={
+            'data':proxy_str
+        }
+
+        data=parse.urlencode(data).encode('utf-8')
+
+        try:
+            opener=request.build_opener()
+            req=request.Request(url,data)
+            res=opener.open(req).read().decode('utf-8')
+        except:
+            try:
+                opener=request.build_opener()
+                req=request.Request(url,data)
+                res=opener.open(req).read().decode('utf-8')
+            except:
+                err_str='error:client->return_proxy:unable to ' \
+                        'connect to server'
+                info_manager(err_str,type='KEY')
+                return
+
+        if 'return success' in res:
+            print('Success: return proxy to server')
+            return
+        else:
+            err_str='error:client->return_proxy:'+res
+            info_manager(err_str,type='KEY')
+            # raise ConnectionError('Unable to return proxy')
+            return
 
     def getBasicInfo(self):
         """
@@ -572,6 +615,7 @@ def check_server():
             err_str='error:client->check_server:cannot ' \
                     'connect to server; process sleeping'
             info_manager(err_str,type='NORMAL')
+            print(e)
             time.sleep(5)       # sleep for 1 seconds
 
 class Connector():
@@ -699,11 +743,12 @@ if __name__=='__main__':
     for p in p_pool:
         p.start()
 
-    while True:
-        time.sleep(5)
-        for i in range(p_pool.__len__()):
-            if not p_pool[i].is_alive():
-                p_pool[i]=Process(target=client,args=())
-                p_pool[i].start()
+    # while True:
+    #     time.sleep(5)
+    #     for i in range(p_pool.__len__()):
+    #         if not p_pool[i].is_alive():
+    #             p_pool[i]=Process(target=client,args=())
+    #             x=random.randint(1,10)
+    #             p_pool[i].start()
 
 

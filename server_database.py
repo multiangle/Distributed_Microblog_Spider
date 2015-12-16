@@ -60,13 +60,13 @@ class deal_cache_attends(threading.Thread):
         ready_to_get_col=self.dbi.get_col_name('ready_to_get')
         cache_attends_col=self.dbi.get_col_name('cache_attends')
         while True:
-            query='select * from cache_attends limit 10'
+            query='select * from cache_attends limit 100'
             res=self.dbi.select_asQuery(query)
             if res.__len__()==0:
                 if bag.__len__()>0:
                     self.dbi.insert_asList('ready_to_get',bag,unique=True)
                     bag=[]
-                    self.bf.insert_asList(uid_bag,'ready_to_get')
+                    # self.bf.insert_asList(uid_bag,'ready_to_get')
                     uid_bag=[]
                 time.sleep(1)
                 self.dbi=MySQL_Interface()  #更新dbi
@@ -83,7 +83,7 @@ class deal_cache_attends(threading.Thread):
                     uid_bag.append(raw_id)
                     if bag.__len__()>bag_size:
                         self.dbi.insert_asList('ready_to_get',bag,unique=True)
-                        self.bf.insert_asList(uid_bag,'ready_to_get')
+                        # self.bf.insert_asList(uid_bag,'ready_to_get')
                         print('insert once')
                         bag=[]
                         uid_bag=[]
@@ -107,7 +107,7 @@ class deal_cache_user_info(threading.Thread):
     def run(self):
         while True:
             if self.dbi.is_empty('cache_user_info'):
-                time.sleep(1)
+                time.sleep(2)
                 self.dbi=MySQL_Interface()
                 continue
             [res,cache_user_info_col]=self.dbi.select_all('cache_user_info')
@@ -115,7 +115,9 @@ class deal_cache_user_info(threading.Thread):
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))      # insert into user info table
             user_info_table_col=self.dbi.get_col_name('user_info_table')
             data= [[line[cache_user_info_col.index(col)] if col in cache_user_info_col else time_stick if col=='insert_time' else '' for col in user_info_table_col ] for line in res]
+            uid_list=[line[user_info_table_col.index('uid')] for line in data]
             self.dbi.insert_asList('user_info_table',data,unique=True)          # 插入 user info table
+            self.bf.insert_asList(uid_list,'user_info_table')
             print('insert {num} users into user info table'.format(num=data.__len__()))
 
             uid_list=[line[cache_user_info_col.index('uid')] for line in res]
