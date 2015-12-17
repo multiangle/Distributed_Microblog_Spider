@@ -321,7 +321,7 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                    'stored in data.pkl'
             info_manager(string,type='KEY')
 
-        # self.return_proxy()
+        self.return_proxy()
         #注意是否要将信息分开发送
         os._exit(0)
 
@@ -331,13 +331,14 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
         return useful or unused proxy to server
         """
 
-        check_server()
+        # check_server()
         url='{url}/proxy_return'.format(url=config.SERVER_URL)
         proxy_ret= [x.raw_data for x in self.proxy_pool]
         proxy_str=''
 
         for item in proxy_ret:
-            proxy_str=proxy_str+item
+            proxy_str=proxy_str+item+';'
+        proxy_str=proxy_str[0:-1]
         data={
             'data':proxy_str
         }
@@ -384,7 +385,9 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
         user_basic_info={}
         info_str = re.findall(r'{(.+?)};', homepage_str)[1].replace("'", "\"")
         info_str = '{'+ info_str +'}'
+        print(info_str)
         info_json = json.loads(info_str)
+
 
         user_basic_info['container_id'] = info_json['common']['containerid']     #containerid
         info = json.loads(info_str)['stage']['page'][1]
@@ -479,9 +482,9 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                 time.sleep(max(random.gauss(0.5,0.1),0.05))
                 try:
                     page=self.conn.getData(url,
-                                           timeout=5,
-                                           reconn_num=1,
-                                           proxy_num=15)
+                                           timeout=10,
+                                           reconn_num=2,
+                                           proxy_num=30)
                 except Exception as e:
                     print('error:getAttends_subThread->run: '
                           'fail to get page'+url)
@@ -505,8 +508,8 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                             print('--- fail to get valid page, sleep for 5 seconds ---')
                             try:
                                 page = self.conn.getData(url,
-                                                         timeout=5,
-                                                         reconn_num=1,
+                                                         timeout=10,
+                                                         reconn_num=2,
                                                          proxy_num=30)
                             except Exception as e:
                                 print('error:getAttends_subThread->run: '
@@ -743,12 +746,12 @@ if __name__=='__main__':
     for p in p_pool:
         p.start()
 
-    # while True:
-    #     time.sleep(5)
-    #     for i in range(p_pool.__len__()):
-    #         if not p_pool[i].is_alive():
-    #             p_pool[i]=Process(target=client,args=())
-    #             x=random.randint(1,10)
-    #             p_pool[i].start()
+    while True:
+        for i in range(p_pool.__len__()):
+            if not p_pool[i].is_alive():
+                p_pool[i]=Process(target=client,args=())
+                x=random.randint(1,10)
+                time.sleep(x)
+                p_pool[i].start()
 
 

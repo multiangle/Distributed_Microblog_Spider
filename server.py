@@ -120,9 +120,14 @@ class ProxyReturn(tornado.web.RequestHandler):
     def post(self):
         global  proxy
         data=self.get_argument('data')
+        print('proxy data:',data)
         proxy_list=data.split(';')
         in_data=[x.split(',') for x in proxy_list]
-        proxy.add(in_data)
+        if in_data.__len__()>0:
+            proxy.add(in_data)
+            print('Success to receive returned proxy')
+            for i in in_data:
+                print(i)
         self.write('return success')
         self.finish()
 
