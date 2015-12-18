@@ -17,9 +17,10 @@ __author__ = 'multiangle'
     Server has to assure that no repeating data exists in database. It a heavy task for
     server to connect with databases.
 
-    VERSION:    _0.1_
+    VERSION:    _0.1.1_
 
     UPDATE_HISTORY:
+        _0.1.1: drop the attends whoes fans num less than 1000
         _0.1_:  The 1st edition
 """
 #======================================================================
@@ -157,7 +158,12 @@ class InfoReturn(tornado.web.RequestHandler):
                 attends_col_info=dbi.get_col_name(table_name)
                 keys=attends[0].keys()
                 attends= [[line[i] if i in keys else '' for i in attends_col_info] for line in attends]
-                dbi.insert_asList(table_name,attends,unique=True)
+                fans_col_pos=attends_col_info.index('fans_num')
+                insert_attends=[]
+                for line in attends:
+                    if line[fans_col_pos]>1000:
+                        insert_attends.append(line)
+                dbi.insert_asList(table_name,insert_attends,unique=True)
                 print('Success : attends of {uid} is stored in {tname}'
                       .format(uid=user_basic_info['uid'],tname=table_name))
             else:
