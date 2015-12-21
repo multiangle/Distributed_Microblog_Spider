@@ -83,6 +83,18 @@ class MySQL_Interface:
         col_name=[x[0] for x in self.cur.fetchall()]
         return col_name
 
+    def get_line_num(self,table_name):
+        query='select count(*) as value from {table_name} ;'.format(table_name=table_name)
+        num=-1
+        try:
+            self.cur.execute(query)
+            res=self.cur.fetchall()
+            num=res[0][0]
+        except Exception as e:
+            print('fail to get line num ',e)
+        return num
+
+
     def select_all(self,table_name,code=''):
         query="select * from %s ;"%(table_name)
         try:

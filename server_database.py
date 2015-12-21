@@ -151,6 +151,17 @@ class deal_fetching_user(threading.Thread):
             self.dbi.update_asQuery(query)
             time.sleep(1)
 
+class control_ready_table(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.dbi=MySQL_Interface()
+    def run(self):
+        while True:
+            num=self.dbi.get_line_num('ready_to_get')
+            if num>150*1000:
+                pass
+                #TODO
+
 class DB_manager(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -179,7 +190,6 @@ class DB_manager(threading.Thread):
                 self.p3=deal_fetching_user()
                 self.p3.start()
                 print('Process: deal_fetching_user is restarted')
-
 
 class SimpleHash():
     def __init__(self,cap,seed):

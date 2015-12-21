@@ -51,7 +51,7 @@ class proxy_manager(threading.Thread):
                     Monitor the state of proxy pool
         """
         thread_pool=[]
-        run_value=[int(self.proxy_pool_size/2),int(self.proxy_pool_size/4)]
+        run_value=[int(self.proxy_pool_size/1),int(self.proxy_pool_size/2)]
         MAX_VALID_PROXY_THREAD_NUM=2                        # maximum num of thread of find valid proxy
         for i in range(MAX_VALID_PROXY_THREAD_NUM):        # initialize of thread pool
             temp_t=find_valid_proxy(self.proxy_pool,self.proxy_lock)
@@ -96,7 +96,7 @@ class find_valid_proxy(threading.Thread):
             t.start()
 
     def get_raw_proxy(self):
-        RAW_PROXY_RATIO=3      # the ratio of raw and valid proxy
+        RAW_PROXY_RATIO=5      # the ratio of raw and valid proxy
         current_proxy_num=self.proxy_pool.size()
         fetch_size=max(0,PROXY_POOL_SIZE-current_proxy_num)*RAW_PROXY_RATIO+1
         url=GET_PROXY_URL.format(NUM=fetch_size)
@@ -108,7 +108,9 @@ class find_valid_proxy(threading.Thread):
             self.raw_proxy=res.split('\r\n')
             if self.raw_proxy.__len__()<fetch_size:
                 print('*** warning: find_valid_proxy -> get_raw_proxy: '
-                      'the proxy num got from web is not enough')
+                      'the proxy num got from web is not enough \n '
+                      'the wanted size is {want_size}, the gotten size is {gotten_size}'
+                      .format(want_size=fetch_size,gotten_size=str(self.raw_proxy.__len__())))
             else:
                 print('get {num} proxy from website'.format(num=fetch_size))
         except Exception as e:
@@ -121,7 +123,9 @@ class find_valid_proxy(threading.Thread):
                 self.raw_proxy=res.split('\r\n')
                 if self.raw_proxy.__len__()<fetch_size:
                     print('*** warning: find_valid_proxy -> get_raw_proxy: '
-                          'the proxy num got from web is not enough')
+                          'the proxy num got from web is not enough \n '
+                          'the wanted size is {want_size}, the gotten size is {gotten_size}'
+                          .format(want_size=fetch_size,gotten_size=str(self.raw_proxy.__len__())))
             except Exception as e:
                 print('error: find_valid_proxy -> get_raw_proxy: ',e)
                 raise IOError('Unable to get raw proxy from website')
