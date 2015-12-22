@@ -219,7 +219,7 @@ class SimpleHash():
 
 class BloomFilter():
     def __init__(self):
-        self.bit_size=1<<25
+        self.bit_size=1<<15
         self.seeds=[5,7,11,13,31,37,61]
         self.r=redis.StrictRedis(host='127.0.0.1',port=6379,db=0)
         self.hashFunc=[]
