@@ -157,10 +157,19 @@ class control_ready_table(threading.Thread):
         self.dbi=MySQL_Interface()
     def run(self):
         while True:
+            self.dbi=MySQL_Interface()
             num=self.dbi.get_line_num('ready_to_get')
             if num>150*1000:
-                pass
-                #TODO
+                query='select m.fans_num from (' \
+                      'select fans_num from ready_to_get ' \
+                      'ORDER BY fans_num limit 50000' \
+                      ') as m order by fans_num desc limit 1'
+                res=self.dbi.select_asQuery(query)[0][0]
+                query='delete from ready_to_get where fans_num<{num}'\
+                    .format(num=res)
+                self.dbi.update_asQuery(query)
+            else:
+                time.sleep(600)
 
 class DB_manager(threading.Thread):
     def __init__(self):
@@ -168,14 +177,17 @@ class DB_manager(threading.Thread):
         self.p1=deal_cache_attends()
         self.p2=deal_cache_user_info()
         self.p3=deal_fetching_user()
+        self.p4=control_ready_table()
 
     def run(self):
         self.p1.start()
         self.p2.start()
         self.p3.start()
+        self.p4.start()
         print('Process: deal_cache_attends is started ')
         print('Process: deal_cache_user_info is started ')
         print('Process: deal_fetching_user is started')
+        print('Process: control_ready_table is started')
         while True:
             time.sleep(5)
             if not self.p1.is_alive():
@@ -190,6 +202,10 @@ class DB_manager(threading.Thread):
                 self.p3=deal_fetching_user()
                 self.p3.start()
                 print('Process: deal_fetching_user is restarted')
+            if not self.p4.is_alive():
+                self.p4=control_ready_table()
+                self.p4.start()
+                print('Process: control_ready_table is restarted')
 
 class SimpleHash():
     def __init__(self,cap,seed):
