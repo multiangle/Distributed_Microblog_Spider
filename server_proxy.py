@@ -6,9 +6,10 @@ __author__ = 'multiangle'
                 from certain http proxy website, then verify if
                 they are useful. Useful proxy is saved in cache
                 and provided to client to get info from website
-    VERSION:    _0.1_
+    VERSION:    _0.2_
 
     UPDATE HISTORY:
+        _0.2_:  add the partition to monitor the state of proxy pool
         _0.1_:  the first edition
 """
 #======================================================================
@@ -25,7 +26,9 @@ import random
 # import from this folder
 from server_config import GET_PROXY_URL,PROXY_POOL_SIZE,PROXY_PATH     #about proxy
 from server_config import VERIFY_PROXY_THREAD_NUM,MAX_VALID_PROXY_THREAD_NUM
+import server_config
 import File_Interface as FI
+from DB_Interface import MySQL_Interface
 #=======================================================================
 
 class proxy_manager(threading.Thread):
@@ -36,6 +39,10 @@ class proxy_manager(threading.Thread):
         self.proxy_pool_size=proxy_pool_size
         self.proxy_lock=proxy_lock
         self.start_up()
+
+        self.ave_pool_size=0       #monitor the state of proxy pool
+        self.input_speed=0
+        self.output_speed=0
 
     def start_up(self):
         """
@@ -74,6 +81,25 @@ class proxy_manager(threading.Thread):
             if not maintain_proxy_thread.is_alive():
                 maintain_proxy_thread=keep_proxy_valid(self.proxy_pool)
                 maintain_proxy_thread.start()
+
+class state_persistance(threading.Thread):
+    """
+    function: monitor and note the state of proxy pool,including the current
+    size of proxy pool, the input speed of new proxy , and the output speed.
+    and manage the average size oj of proxy_pool class
+    """
+    def __init__(self,proxy_pool):
+        threading.Thread.__init__(self)
+        self.proxy_pool=proxy_pool
+        self.dbi=MySQL_Interface()
+
+    def run(self):
+        adf
+        while True:
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            current_size=self.proxy_pool.size()
+            
+            time.sleep(server_config.PROXY_MONITOR_GAP)
 
 class find_valid_proxy(threading.Thread):
     """
@@ -363,8 +389,6 @@ class keep_proxy_valid(threading.Thread):
             user['fans_num']=temp
 
         return user
-
-
 
 def proxy_info_print(str_info,type='NORMAL'):     # decide if normal of key infomation should be print
     from server_config import PROXY_NORMAL_INFO_PRINT

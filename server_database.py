@@ -16,9 +16,9 @@ __author__ = 'multiangle'
     4. Check the ready_to_get table . if some uid is fetching for too much time, set
     the value if is_fetching to null
     -----------------------------------------------------------------------
-    VERSION:    _0.1.1_
+    VERSION:    _0.2_
     UPDATE_HISTORY:
-        _0.1.1: add redis and bloom filter as the cache of mysql
+        _0.2:   add redis and bloom filter as the cache of mysql
         _0.1_:  The 1st edition
 """
 # TODO 第三个功能还未实现 。
