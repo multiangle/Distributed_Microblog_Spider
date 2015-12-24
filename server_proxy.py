@@ -40,10 +40,6 @@ class proxy_manager(threading.Thread):
         self.proxy_lock=proxy_lock
         self.start_up()
 
-        self.ave_pool_size=0       #monitor the state of proxy pool
-        self.input_speed=0
-        self.output_speed=0
-
     def start_up(self):
         """
         function:   used to recover info when start up this process
@@ -71,6 +67,9 @@ class proxy_manager(threading.Thread):
         maintain_proxy_thread=keep_proxy_valid(self.proxy_pool)
         maintain_proxy_thread.start()
 
+        state_persistance_thread=state_persistance(self.proxy_pool)
+        state_persistance_thread.start()
+
         while (True):
             time.sleep(0.1)
             for i in range(thread_pool.__len__()):
@@ -81,6 +80,9 @@ class proxy_manager(threading.Thread):
             if not maintain_proxy_thread.is_alive():
                 maintain_proxy_thread=keep_proxy_valid(self.proxy_pool)
                 maintain_proxy_thread.start()
+            if not state_persistance_thread.is_alive():
+                state_persistance_thread=state_persistance(self.proxy_pool)
+                state_persistance_thread.start()
 
 class state_persistance(threading.Thread):
     """
@@ -94,11 +96,12 @@ class state_persistance(threading.Thread):
         self.dbi=MySQL_Interface()
 
     def run(self):
-        adf
         while True:
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
             current_size=self.proxy_pool.size()
-            
+            [input,output]=self.proxy_pool.update_proxy_state()
+            insert_value=[[current_size,time_stick,input,output]]
+            self.dbi.insert_asList('proxy_table',insert_value,unique=True)
             time.sleep(server_config.PROXY_MONITOR_GAP)
 
 class find_valid_proxy(threading.Thread):
@@ -257,14 +260,10 @@ class proxy_pool():
     def __init__(self):
         self.proxy=[]
 
-    def get(self,num):      # return [[]...[]]
-        if self.proxy.__len__()==0:
-            return []
-        if self.proxy.__len__()<num:
-            num=self.proxy.__len__()
-        res=[x for x in self.proxy[0:num]]
-        self.proxy=self.proxy[num:]
-        return res
+        self.ave_proxy_size=0   # used to monitor the state of proxy pool
+        self.proxy_size_list=[]
+        self.input_speed=0
+        self.output_speed=0
 
     def add(self,data):
         """
@@ -273,10 +272,8 @@ class proxy_pool():
                         and so on
         """
         self.proxy=data+self.proxy
-
-    def size(self):
-
-        return self.proxy.__len__()
+        if isinstance(data,list) and data.__len__()>0:
+            self.input_speed+=data.__len__()
 
     def insert(self,single_data):
         """
@@ -284,17 +281,54 @@ class proxy_pool():
                 [ip:port(str),timedelay(float)] and so on
         """
         self.proxy.insert(0,single_data)
+        self.input_speed+=1
 
     def sort(self):         # sort according to the timedelay
         pass
         #TODO
+
     def empty(self):        #清空proxy列表
+        self.output_speed+=self.proxy.__len__()
         self.proxy=[]
+
+    def get(self,num):      # return [[]...[]]
+        if self.proxy.__len__()==0:
+            return []
+        if self.proxy.__len__()<num:
+            num=self.proxy.__len__()
+        res=[x for x in self.proxy[0:num]]
+        self.proxy=self.proxy[num:]
+        self.output_speed+=num
+        return res
 
     def pop(self):
         if self.proxy.__len__()==0:
             return []
+        self.output_speed+=1
         return self.proxy.pop()
+
+    def size(self):
+
+        return self.proxy.__len__()
+
+    def get_ave_proxy_size(self):
+        return self.ave_proxy_size
+
+    def update_proxy_state(self):      # return the value of in&output speed
+        if self.proxy_size_list.__len__()>server_config.PROXY_SIZE_STATE_LIST_LEN:
+            self.proxy_size_list.pop()
+            self.proxy_size_list.insert(0,self.proxy.__len__())
+        else:
+            self.proxy_size_list.insert(0,self.proxy.__len__())
+        self.ave_proxy_size=int(sum(self.proxy_size_list)/self.proxy_size_list.__len__())
+
+        a=self.input_speed              # and reset these two values as 0
+        b=self.output_speed
+        self.input_speed=0
+        self.output_speed=0
+        return [a,b]
+
+
 
 class keep_proxy_valid(threading.Thread):
     def __init__(self,proxy_pool):
