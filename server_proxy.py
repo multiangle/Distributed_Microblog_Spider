@@ -328,8 +328,6 @@ class proxy_pool():
         self.output_speed=0
         return [a,b]
 
-
-
 class keep_proxy_valid(threading.Thread):
     def __init__(self,proxy_pool):
         threading.Thread.__init__(self)

@@ -7,7 +7,6 @@ import urllib.request as request
 import urllib.parse as parse
 import time
 import datetime
-import redis
 import random
 import http.cookiejar
 
@@ -39,7 +38,12 @@ def parse_blog_page(data):
         res=parse_card_group(block)
         data_list.append(res)
 
+    for item in data_list:
+        print(json.dumps(item,indent=4))
+
 def parse_card_group(data):
+    data=data['mblog']
+    print(json.dumps(data))
     msg={}
     keys=data.keys()
     if 'id' in keys:
@@ -54,7 +58,7 @@ def parse_card_group(data):
         msg['comments_count']=data['comments_count']
     if 'like_count' in keys:
         msg['like_count']=data['like_count']
-
+    return msg
 
 
 

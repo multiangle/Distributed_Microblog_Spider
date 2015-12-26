@@ -82,7 +82,6 @@ class client():          # the main process of client
                 # self.return_proxy()
                 break
 
-
     def get_task(self):
 
         """
@@ -107,8 +106,9 @@ class client():          # the main process of client
 
         if 'no task' in res:       # if server have no task uid ,return 'no task uid'
             err_str= 'error: client -> get_task : ' \
-                     'unable to get task, exit process'
+                     'unable to get task, sleep for 1 min and exit process'
             info_manager(err_str,type='KEY')
+            time.sleep(60)
             os._exit(0)
 
         try:        # try to parse task str

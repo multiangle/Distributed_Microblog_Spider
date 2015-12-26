@@ -17,10 +17,13 @@ __author__ = 'multiangle'
     Server has to assure that no repeating data exists in database. It a heavy task for
     server to connect with databases.
 
-    VERSION:    _0.1.1_
+    VERSION:
+       _0.3_
 
     UPDATE_HISTORY:
-        _0.1.1: drop the attends whoes fans num less than 1000
+        _0.3_:  if the average proxy size less than 30, refuse
+                to assignment task to client
+        _0.2_:  drop the attends whoes fans num less than 1000
         _0.1_:  The 1st edition
 """
 #======================================================================
@@ -84,24 +87,29 @@ class ProxyHandler(tornado.web.RequestHandler):
 
 class TaskHandler(tornado.web.RequestHandler):
     def get(self):
-        dbi=MySQL_Interface()
-        query='select * from ready_to_get where is_fetching is null order by fans_num desc limit 1;'
-        res=dbi.select_asQuery(query)
-        if res.__len__()==0:
+        global proxy
+        if proxy.get_ave_proxy_size()>30:
+            dbi=MySQL_Interface()
+            query='select * from ready_to_get where is_fetching is null order by fans_num desc limit 1;'
+            res=dbi.select_asQuery(query)
+            if res.__len__()==0:
+                self.write('no task')
+                self.finish()
+                return
+            res=res[0]
+            col_info=dbi.get_col_name('ready_to_get')
+            uid=res[col_info.index('uid')]
+
+            self.write('{uid},connect'.format(uid=uid))
+            self.finish()
+
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            query="update ready_to_get set is_fetching=\'{t_time}\' where uid={uid} ;"\
+                .format(t_time=time_stick,uid=uid)
+            dbi.update_asQuery(query)
+        else:
             self.write('no task')
             self.finish()
-            return
-        res=res[0]
-        col_info=dbi.get_col_name('ready_to_get')
-        uid=res[col_info.index('uid')]
-
-        self.write('{uid},connect'.format(uid=uid))
-        self.finish()
-
-        time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-        query="update ready_to_get set is_fetching=\'{t_time}\' where uid={uid} ;"\
-            .format(t_time=time_stick,uid=uid)
-        dbi.update_asQuery(query)
 
 class ProxySize(tornado.web.RequestHandler):
     global proxy
