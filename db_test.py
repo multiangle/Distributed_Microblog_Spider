@@ -43,7 +43,6 @@ def parse_blog_page(data):
 
 def parse_card_group(data):
     data=data['mblog']
-    print(json.dumps(data))
     msg={}
     keys=data.keys()
     if 'id' in keys:
@@ -58,8 +57,26 @@ def parse_card_group(data):
         msg['comments_count']=data['comments_count']
     if 'like_count' in keys:
         msg['like_count']=data['like_count']
+    if 'created_timestamp' in keys:
+        msg['time_stamp']=data['created_timestamp']
+    if 'user' in keys:
+        msg['user']=parse_user_info(data['user'])
     return msg
 
+def parse_user_info(user_data):
+    keys=user_data.keys()
+    user={}
+    if 'id' in keys:
+        user['uid']=user_data['id']
+    if 'screen_name' in keys:
+        user['name']=user_data['screen_name']
+    if 'profile_url' in keys:
+        user['user_page']=user_data['profile_url']
+    if 'description' in keys:
+        user['description']=user_data['description']
+    if 'fansNum' in keys:
+        user['fans_num']=user_data['fansNum']
+    return user
 
 
 def save_page(page):
@@ -67,7 +84,7 @@ def save_page(page):
     #TODO 未完成
 
 url='http://m.weibo.cn/page/json?containerid=1005051496822520' \
-    '_-_WEIBO_SECOND_PROFILE_WEIBO&page=240'
+    '_-_WEIBO_SECOND_PROFILE_WEIBO&page=10'
 headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
                          'AppleWebKit/600.1.3 (KHTML, like Gecko) Version/8.0 Mobile'
                          '/12A4345d Safari/600.1.4'}

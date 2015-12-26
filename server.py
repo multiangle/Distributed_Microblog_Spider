@@ -53,7 +53,7 @@ class Application(tornado.web.Application):
         handlers=[
             (r'/auth',AuthHandler),
             (r'/proxy/',ProxyHandler),
-            (r'/task',TaskHandler),
+            (r'/task/',TaskHandler),
             (r'/proxy_size',ProxySize),
             (r'/proxy_empty',ProxyEmpty),
             (r'/proxy_return',ProxyReturn),
@@ -88,7 +88,20 @@ class ProxyHandler(tornado.web.RequestHandler):
 class TaskHandler(tornado.web.RequestHandler):
     def get(self):
         global proxy
-        if proxy.get_ave_proxy_size()>30:
+        uuid=str(self.get_argument('uuid'))
+        task_id=self.task_assign(uuid)
+
+        if proxy.get_ave_proxy_size()<30:   # check the size of current proxy size
+            self.write('no task')
+            self.finish()
+            return
+
+        if task_id==-1:       # checi if this uuid is valid
+            self.write('no task')
+            self.finish()
+            return
+
+        if task_id==1:         # get the social web of certain user
             dbi=MySQL_Interface()
             query='select * from ready_to_get where is_fetching is null order by fans_num desc limit 1;'
             res=dbi.select_asQuery(query)
@@ -107,9 +120,32 @@ class TaskHandler(tornado.web.RequestHandler):
             query="update ready_to_get set is_fetching=\'{t_time}\' where uid={uid} ;"\
                 .format(t_time=time_stick,uid=uid)
             dbi.update_asQuery(query)
-        else:
-            self.write('no task')
+
+        if task_id==2:      # this part is in test
+            dbi=MySQL_Interface()
+            query='select container_id,blog_num from user_info_table ' \
+                  'order by rand() limit 1 ;'
+            [container_id,blog_num]=dbi.select_asQuery(query)[0]
+            self.write('{c_id};{blog},history'
+                       .format(c_id=container_id,blog=blog_num))
             self.finish()
+
+        if task_id==3:
+            pass
+            #TODO update content
+
+    def task_assign(self,uuid):
+        t_1=['1']         # get social web
+        t_2=['2']         # get history weibo
+        t_3=[]          # update the weibo info
+        if uuid in t_1:
+            return 1
+        elif uuid in t_2:
+            return 2
+        elif uuid in t_3:
+            return 3
+        else:
+            return -1
 
 class ProxySize(tornado.web.RequestHandler):
     global proxy
@@ -217,6 +253,7 @@ class InfoReturn(tornado.web.RequestHandler):
             print('unable to store atten web of {uid} , it will be stored'
                   .format(uid=user_basic_info['uid']))
             FI.save_pickle(data,path)
+
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()         # proxy thread

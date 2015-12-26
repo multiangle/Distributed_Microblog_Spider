@@ -51,8 +51,12 @@ class client():          # the main process of client
         # 监控proxy pool,建议get_proxy_pool单独开一个线程，
         # 如果server立即返回则马上关闭，否则设为长连接
 
-        getinfo_thread=getInfo(self.proxy_pool,self.task_uid)
-        getinfo_thread.start()
+        if self.task_type=='connect':
+            sub_thread=getInfo(self.proxy_pool,self.task_uid)
+        if self.task_type=='history':
+            sub_thread=getHistory(self.proxy_pool,self.task_uid)
+            #TODO 判断其他种类的task该做什么
+        sub_thread.start()
         inner_count=0
 
         while True:
@@ -78,7 +82,7 @@ class client():          # the main process of client
                 info_manager(err_str)
                 self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
 
-            if not getinfo_thread.is_alive():
+            if not sub_thread.is_alive():
                 # self.return_proxy()
                 break
 
@@ -88,7 +92,7 @@ class client():          # the main process of client
         get task user id from server
         """
 
-        url='{url}/task'.format(url=config.SERVER_URL)
+        url='{url}/task/?uuid={uuid}'.format(url=config.SERVER_URL,uuid=config.UUID)
 
         try:
             res=request.urlopen(url,timeout=10).read()
@@ -737,6 +741,160 @@ def info_manager(info_str,type='NORMAL'):
     if type=='KEY':
         if config.KEY_INFO_PRINT:
             print(str)
+
+class getHistory(threading.Thread):
+
+    def __init__(self,proxy_pool,task_uid):
+        threading.Thread.__init__(self)
+        task_uid=task_uid.split(';')
+        self.container_id=task_uid[0]
+        self.blog_num=task_uid[1]
+        self.proxy_pool=proxy_pool
+
+    def run(self):
+
+        model_url='http://m.weibo.cn/page/json?containerid='\
+                  +str(self.container_id)+\
+                  '_-_WEIBO_SECOND_PROFILE_WEIBO&page={page}'
+        page_num=int(self.blog_num/10)
+        task_url=[model_url.format(page=(i+1)) for i in range(page_num)]
+        random.shuffle(task_url)
+        contents=[]
+        threads_pool=[]
+        for i in range(config.THREAD_NUM):  # thread initialization
+            t=self.getHistory_subThread(task_url,self.proxy_pool,contents)
+            threads_pool.append(t)
+        for t in threads_pool:
+            t.start()
+
+        while True:
+            time.sleep(0.2)
+            if task_url:    # if task url not null, check if all thread is working
+                for i in range(config.THREAD_NUM):
+                    if not threads_pool[i].is_alive():
+                        threads_pool[i]=self.getHistory_subThread(
+                            task_url,self.proxy_pool,contents)
+                        threads_pool[i].start()
+            else:       # if task is void ,exit if all subthread is stoped
+                all_stoped=True
+                for t in threads_pool:
+                    if t.is_alive():
+                        all_stoped=False
+                if all_stoped:
+                    break
+
+        # TODO 搜集到的信息需要去重
+        # TODO 将contents 返回到服务器
+
+    class getHistory_subThread(threading.Thread):
+
+        def __init__(self,task_url,proxy_pool,contents):
+            threading.Thread.__init__(self)
+            self.task_url=task_url
+            self.proxy_pool=proxy_pool
+            self.contents=contents
+            self.conn=Connector(proxy_pool)
+
+        def run(self):
+            while True:
+                if not self.task_url:
+                    break
+                url=self.task_url.pop(0)
+                time.sleep(max(random.gauss(0.5,0.1),0.05))
+                try:
+                    page=self.conn.getData(url,
+                                           timeout=10,
+                                           reconn_num=2,
+                                           proxy_num=30)
+                except Exception as e:
+                    print('error:getHistory_subThread->run: '
+                          'fail to get page'+url)
+                    print('skip this page')
+                    continue
+
+                try:
+                    res=parse_blog_page(page)
+                    self.contents[:]=self.contents[:]+res
+                    info_str='Success: Page {url} is done'.format(url=url)
+                    info_manager(info_str,type='NORMAL')
+                except Exception as e:
+                    info_str='error: getHistory_subThread->run: ' \
+                            'fail to parse {url}'.format(url=url)
+                    info_manager(info_str,type='KEY')
+                    print(e)
+
+
+def parse_blog_page(data):
+    try:        # check if the page is json type
+        data=json.loads(data)
+    except:
+        save_page(data)
+        raise ValueError('Unable to parse page')
+
+    try:        # check if the page is empty
+        mod_type=data['cards'][0]['mod_type']
+    except:
+        save_page(json.dumps(data))
+        raise ValueError('The type of this page is incorrect')
+
+    if 'empty' in mod_type:
+        raise ValueError('This page is empty')
+
+    try:        # get card group as new data
+        data=data['cards'][0]['card_group']
+    except:
+        save_page(json.dumps(data))
+        raise ValueError('The type of this page is incorrect')
+
+    data_list=[]
+    for block in data:
+        res=parse_card_group(block)
+        data_list.append(res)
+
+    return data_list
+    # for item in data_list:
+    #     print(json.dumps(item,indent=4))
+
+def parse_card_group(data):
+    data=data['mblog']
+    msg={}
+    keys=data.keys()
+    if 'id' in keys:
+        msg['msg_id']=data['id']
+    if 'text' in keys:
+        msg['content']=data['text']
+    if 'created_at' in keys:
+        msg['time']=data['created_at']
+    if 'reposts_count' in keys:
+        msg['reposts_count']=data['reposts_count']
+    if 'comments_count' in keys:
+        msg['comments_count']=data['comments_count']
+    if 'like_count' in keys:
+        msg['like_count']=data['like_count']
+    if 'created_timestamp' in keys:
+        msg['time_stamp']=data['created_timestamp']
+    if 'user' in keys:
+        msg['user']=parse_user_info(data['user'])
+    return msg
+
+def parse_user_info(user_data):
+    keys=user_data.keys()
+    user={}
+    if 'id' in keys:
+        user['uid']=user_data['id']
+    if 'screen_name' in keys:
+        user['name']=user_data['screen_name']
+    if 'profile_url' in keys:
+        user['user_page']=user_data['profile_url']
+    if 'description' in keys:
+        user['description']=user_data['description']
+    if 'fansNum' in keys:
+        user['fans_num']=user_data['fansNum']
+    return user
+
+def save_page(page):
+    pass
+    #TODO 未完成
 
 if __name__=='__main__':
     p_pool=[]
