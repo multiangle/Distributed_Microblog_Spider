@@ -9,9 +9,11 @@ __author__ = 'multiangle'
                 server by POST method. If the data wanted to post
                 is too large, it will be seperated into severl parts
                 and transport individually
-    VERSION:    _0.1_
+    VERSION:    _0.2_
 
     UPDATE_HISTORY:
+        _0.2_:  add the function of scratching the history of
+                certain user
         _0.1_:  The 1st edition
 """
 #======================================================================
