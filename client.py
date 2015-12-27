@@ -783,8 +783,111 @@ class getHistory(threading.Thread):
                 if all_stoped:
                     break
 
-        # TODO 搜集到的信息需要去重
-        # TODO 将contents 返回到服务器
+        content_unique=[]      # pick out the repeated content
+        content_msgid=[]
+        for i in range(contents.__len__()):
+            if contents[i]['msg_id'] not in content_msgid:
+                content_msgid.append(contents[i]['msg_id'])
+                content_unique.append(contents[i])
+            else:
+                pass
+
+        userHistory={           # return the user's history to server
+            'user_history':content_unique
+        }
+        try:
+            data=parse.urlencode(userHistory).encode('utf8')
+        except:
+            err_str='error:getHistory->run: ' \
+                    'unable to parse uesr history data'
+            info_manager(err_str,type='KEY')
+            raise TypeError('Unable to parse user history')
+        url='{url}/history_return'.format(url=config.SERVER_URL)
+        req=request.Request(url,data)
+        opener=request.build_opener()
+
+        try:
+            res=opener.open(req)
+        except:
+            times=0
+
+            while times<5:
+                times+=1
+                time.sleep(3)
+                try:
+                    res=opener.open(req)
+                    break
+                except:
+                    warn_str='warn:getHistory->run:' \
+                             'unable to return history to server ' \
+                             'try {num} times'.format(num=times)
+                    info_manager(warn_str,type='NORMAL')
+            if times==5:
+                FI.save_pickle(contents,'data.pkl')
+                string='warn: getHistory->run: ' \
+                       'get user history , but unable to connect server,' \
+                       'stored in data.pkl'
+                info_manager(string,type='KEY')
+
+        res=res.read().decode('utf8')
+        if 'success to return user history'in res:
+            suc_str='Success:getHistory->run:' \
+                    'Success to return user history to server'
+            info_manager(suc_str,type='KEY')
+        else:
+            FI.save_pickle(contents,'data.pkl')
+            string='warn: getHistory->run: ' \
+                   'get user history, but unable to connect server,' \
+                   'stored in data.pkl'
+            info_manager(string,type='KEY')
+
+        self.return_proxy()
+
+        os._exit(0)
+
+    def return_proxy(self):
+
+        """
+        return useful or unused proxy to server
+        """
+
+        # check_server()
+        url='{url}/proxy_return'.format(url=config.SERVER_URL)
+        proxy_ret= [x.raw_data for x in self.proxy_pool]
+        proxy_str=''
+
+        for item in proxy_ret:
+            proxy_str=proxy_str+item+';'
+        proxy_str=proxy_str[0:-1]
+        data={
+            'data':proxy_str
+        }
+
+        data=parse.urlencode(data).encode('utf-8')
+
+        try:
+            opener=request.build_opener()
+            req=request.Request(url,data)
+            res=opener.open(req).read().decode('utf-8')
+        except:
+            try:
+                opener=request.build_opener()
+                req=request.Request(url,data)
+                res=opener.open(req).read().decode('utf-8')
+            except:
+                err_str='error:client->return_proxy:unable to ' \
+                        'connect to server'
+                info_manager(err_str,type='KEY')
+                return
+
+        if 'return success' in res:
+            print('Success: return proxy to server')
+            return
+        else:
+            err_str='error:client->return_proxy:'+res
+            info_manager(err_str,type='KEY')
+            # raise ConnectionError('Unable to return proxy')
+            return
 
     class getHistory_subThread(threading.Thread):
 
