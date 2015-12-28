@@ -18,13 +18,7 @@ __author__ = 'multiangle'
     server to connect with databases.
 
     VERSION:
-       _0.3_
-
-    UPDATE_HISTORY:
-        _0.3_:  if the average proxy size less than 30, refuse
-                to assignment task to client
-        _0.2_:  drop the attends whoes fans num less than 1000
-        _0.1_:  The 1st edition
+       _0.5_
 """
 #======================================================================
 #----------------import package--------------------------
@@ -57,7 +51,8 @@ class Application(tornado.web.Application):
             (r'/proxy_size',ProxySize),
             (r'/proxy_empty',ProxyEmpty),
             (r'/proxy_return',ProxyReturn),
-            (r'/info_return',InfoReturn)
+            (r'/info_return',InfoReturn),
+            (r'/history_return',HistoryReturn)
         ]
         settings=dict(
             debug=True
@@ -254,6 +249,19 @@ class InfoReturn(tornado.web.RequestHandler):
                   .format(uid=user_basic_info['uid']))
             FI.save_pickle(data,path)
 
+class HistoryReturn(tornado.web.RequestHandler):
+    def post(self):
+        try:
+            user_history=self.get_argument('user_history')
+            user_history=eval(user_history)
+            self.write('success to return user history')
+            self.finish()
+        except:
+            self.write('fail to return user history')
+            self.finish()
+            return
+
+        #TODO 把相对应的内容存入mongodb
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()         # proxy thread

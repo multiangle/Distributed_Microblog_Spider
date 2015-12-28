@@ -9,12 +9,8 @@ __author__ = 'multiangle'
                 server by POST method. If the data wanted to post
                 is too large, it will be seperated into severl parts
                 and transport individually
-    VERSION:    _0.2_
+    VERSION:    _0.5_
 
-    UPDATE_HISTORY:
-        _0.2_:  add the function of scratching the history of
-                certain user
-        _0.1_:  The 1st edition
 """
 #======================================================================
 #----------------import package--------------------------
@@ -758,7 +754,7 @@ class getHistory(threading.Thread):
         model_url='http://m.weibo.cn/page/json?containerid='\
                   +str(self.container_id)+\
                   '_-_WEIBO_SECOND_PROFILE_WEIBO&page={page}'
-        page_num=int(self.blog_num/10)
+        page_num=int(int(self.blog_num)/10)
         task_url=[model_url.format(page=(i+1)) for i in range(page_num)]
         random.shuffle(task_url)
         contents=[]
@@ -804,6 +800,10 @@ class getHistory(threading.Thread):
                     'unable to parse uesr history data'
             info_manager(err_str,type='KEY')
             raise TypeError('Unable to parse user history')
+        #test
+        for i in contents:
+            print(json.dumps(i,indent=4))
+        #test
         url='{url}/history_return'.format(url=config.SERVER_URL)
         req=request.Request(url,data)
         opener=request.build_opener()
@@ -919,6 +919,10 @@ class getHistory(threading.Thread):
 
                 try:
                     res=parse_blog_page(page)
+                    # TODO DELETE for test--------
+                    for i in res:
+                        print(json.dumps(i,indent=4))
+                    #---------------------------------
                     self.contents[:]=self.contents[:]+res
                     info_str='Success: Page {url} is done'.format(url=url)
                     info_manager(info_str,type='NORMAL')

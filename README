@@ -23,3 +23,11 @@ The Server terminal mainly deal with 3 tasks.
         table. And ,as for attends, if they are not contained in user_info_table, they will be inserted
         to ready_to_get table.
 ==========================================================================================================
+
+UPDATE HISTORY:
+
+    _0.5_   :   add the function of scratching the history of certain user
+    _0.4_   :   if the average proxy size less than 30, refuse to assignment task to client
+    _0.3_   :   drop the attends whoes fans num less than 1000
+    _0.2_   :   add the partition to monitor the state of proxy pool
+    _0.1_   :   the initial edition
