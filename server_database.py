@@ -114,7 +114,14 @@ class deal_cache_user_info(threading.Thread):
 
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))      # insert into user info table
             user_info_table_col=self.dbi.get_col_name('user_info_table')
-            data= [[line[cache_user_info_col.index(col)] if col in cache_user_info_col else time_stick if col=='insert_time' else '' for col in user_info_table_col ] for line in res]
+            data= [
+                    [
+                        line[cache_user_info_col.index(col)] if col in cache_user_info_col
+                        else time_stick if col=='insert_time'
+                        else None if col=='update_time'
+                        else ''
+                        for col in user_info_table_col
+                    ] for line in res]
             uid_list=[line[user_info_table_col.index('uid')] for line in data]
             self.dbi.insert_asList('user_info_table',data,unique=True)          # 插入 user info table
             self.bf.insert_asList(uid_list,'user_info_table')
