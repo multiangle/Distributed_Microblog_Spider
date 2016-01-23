@@ -56,11 +56,11 @@ class deal_cache_attends(threading.Thread):
     def  run(self):
         bag=[]
         uid_bag=[]              #与bag类似，只不过存储uid
-        bag_size=100             #100次插入一次
+        bag_size=1000             #100次插入一次
         ready_to_get_col=self.dbi.get_col_name('ready_to_get')
         cache_attends_col=self.dbi.get_col_name('cache_attends')
         while True:
-            query='select * from cache_attends limit 1000'
+            query='select * from cache_attends limit 5000'
             res=self.dbi.select_asQuery(query)
             if res.__len__()==0:
                 if bag.__len__()>0:
