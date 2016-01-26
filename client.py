@@ -25,6 +25,7 @@ import json
 import http.cookiejar
 import re
 import random
+from random import Random
 
 # import from this folder
 import client_config as config
@@ -790,6 +791,16 @@ class getHistory(threading.Thread):
             else:
                 pass
 
+        # for test
+        #todo to delete
+        model_name='F:\\multiangle\\Coding!\\python\\' \
+                   'Distributed_Microblog_Spider\\{id}.pkl'\
+            .format(id=self.container_id)
+        FI.save_pickle(content_unique,model_name)
+        print('user {id} is fetched, saved'.format(id=self.container_id))
+        #
+
+
         userHistory={           # return the user's history to server
             'user_history':content_unique
         }
@@ -800,10 +811,7 @@ class getHistory(threading.Thread):
                     'unable to parse uesr history data'
             info_manager(err_str,type='KEY')
             raise TypeError('Unable to parse user history')
-        #test
-        for i in contents:
-            print(json.dumps(i,indent=4))
-        #test
+
         url='{url}/history_return'.format(url=config.SERVER_URL)
         req=request.Request(url,data)
         opener=request.build_opener()
@@ -932,7 +940,6 @@ class getHistory(threading.Thread):
                     info_manager(info_str,type='KEY')
                     print(e)
 
-
 def parse_blog_page(data):
     try:        # check if the page is json type
         data=json.loads(data)
@@ -945,6 +952,16 @@ def parse_blog_page(data):
     except:
         save_page(json.dumps(data))
         raise ValueError('The type of this page is incorrect')
+
+    # debug
+    #TODO to delete
+    temp_name=random_str(randomlength=15)
+    base_dir='F:\\multiangle\\Coding!\\python\\Distribut' \
+            'ed_Microblog_Spider\\html_page\\'
+    path=base_dir+temp_name+'.pkl'
+    FI.save_pickle(data,path)
+    # debug
+
 
     if 'empty' in mod_type:
         raise ValueError('This page is empty')
@@ -964,12 +981,79 @@ def parse_blog_page(data):
     # for item in data_list:
     #     print(json.dumps(item,indent=4))
 
+def temp_page_parser(data):  #用来测试网页对应内容的临时程序
+    #data 是一个字典格式
+    keys=list(data.keys())
+    msg={}
+    key_array=[
+        'created_at',               #信息创建时间
+        'attitudes_count',          #点赞数
+        'mlevel',            #不明
+        'biz_feature',      #不明
+        'biz_ids',          #不明
+        'source_type',      #不明
+        'hot_weibo_tags',  #不明
+        'isLongText',               #是否是长微博
+        'original_pic',             #图片相关，似乎相关信息可以在pic中找到
+        'mblogtype',        #不明
+        'idstr',                    #等同于id，是str形式
+        'pic_ids',                  #图片id
+        'visible',          #不明
+        'bmiddle_pic',      #不明
+        'pics',                     #如果包含图的话，有该项，包括size,pid,geo,url等
+        'mid',                      #等同于id
+        'userType',         #不明
+        'thumbnail_pic',            #地址似乎等于pic中图片地址
+        'favorited',        #不明
+        'attitudes_status',#不明
+        'bid',               #不明
+        'source',           #不明
+        'source_allowclick',#不明
+        'id',                        #信息id
+        'text',                      #文本信息
+        'reposts_count',            #转发数
+        'comments_count',           #评论数目
+        'like_count',               #点赞数目
+        'created_timestamp',        #创建时间戳
+        'source_type',      #不明
+        'cardid',          #不明，应该是显示账号等级的，如star_003等等
+        'retweeted_status',         #转发相关
+        'url_struct',        #不明，字典形式
+        'topic_struct',     #不明，似乎是topic结构，是字典 形式
+        'page_info'          #不太明，似乎与多媒体有关，字典形式
+    ]
+    for item in key_array:
+        if item in keys:
+            msg[item]=data[item]
+    all_in=True
+    for item in keys:
+        if item not in key_array:
+            if item!='text' and item!='user' :
+                all_in=False
+                break
+    if not all_in:
+        temp_name=random_str(randomlength=15)
+        base_dir='F:\\multiangle\\Coding!\\python\\Distribut' \
+                 'ed_Microblog_Spider\\html_page\\'
+        path=base_dir+temp_name+'.pkl'
+        FI.save_pickle(data,path)
+
+    if 'text' in keys:
+        msg['content']=data['text']
+    if 'user' in keys:
+        msg['user']=parse_user_info(data['user'])
+
 def parse_card_group(data):
     data=data['mblog']
+    temp_page_parser(data)
+    msg=parse_card_inner(data)
+    return msg
+
+def parse_card_inner(data):
     msg={}
     keys=data.keys()
     if 'id' in keys:
-        msg['msg_id']=data['id']
+        msg['msg_id']=data['idstr']
     if 'text' in keys:
         msg['content']=data['text']
     if 'created_at' in keys:
@@ -984,7 +1068,13 @@ def parse_card_group(data):
         msg['time_stamp']=data['created_timestamp']
     if 'user' in keys:
         msg['user']=parse_user_info(data['user'])
+    if 'retweeted_status' in keys:
+        msg['is_retweeted']=True
+        msg['retweeted_info']=parse_card_inner(data['retweeted_status'])
+    else:
+        msg['is_retweeted']=False
     return msg
+    #todo  需要处理的内容：text,retweeted,topic_struct,url_struct,page_info
 
 def parse_user_info(user_data):
     keys=user_data.keys()
@@ -1000,6 +1090,15 @@ def parse_user_info(user_data):
     if 'fansNum' in keys:
         user['fans_num']=user_data['fansNum']
     return user
+
+def random_str(randomlength=8):
+    str = ''
+    chars = 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789'
+    length = len(chars) - 1
+    random = Random()
+    for i in range(randomlength):
+        str+=chars[random.randint(0, length)]
+    return str
 
 def save_page(page):
     pass
