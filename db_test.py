@@ -9,6 +9,7 @@ import time
 import datetime
 import random
 import http.cookiejar
+import networkx as nx
 
 
 def parse_blog_page(data):
@@ -112,5 +113,5 @@ x=parse_blog_page(data)
 
 # data=FI.load_pickle('test.pkl')
 # print(data)
-
+print(nx)
 

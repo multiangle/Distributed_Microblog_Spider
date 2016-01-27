@@ -1002,13 +1002,19 @@ def temp_page_parser(data):  #用来测试网页对应内容的临时程序
         'bmiddle_pic',      #不明
         'pics',                     #如果包含图的话，有该项，包括size,pid,geo,url等
         'mid',                      #等同于id
+        'pid',               #不明
         'userType',         #不明
         'thumbnail_pic',            #地址似乎等于pic中图片地址
         'favorited',        #不明
         'attitudes_status',#不明
         'bid',               #不明
+        'page_type',        #不明
+        'textLength',               #文本长度
         'source',           #不明
         'source_allowclick',#不明
+        'expire_time',      #不明
+        'extend_info',      #不明，不过似乎没什么用
+        'mark',              #不明
         'id',                        #信息id
         'text',                      #文本信息
         'reposts_count',            #转发数
@@ -1051,7 +1057,7 @@ def parse_card_group(data):
 
 def parse_card_inner(data):
     msg={}
-    keys=data.keys()
+    keys=list(data.keys())
     if 'id' in keys:
         msg['msg_id']=data['idstr']
     if 'text' in keys:
@@ -1075,6 +1081,9 @@ def parse_card_inner(data):
         msg['is_retweeted']=False
     return msg
     #todo  需要处理的内容：text,retweeted,topic_struct,url_struct,page_info
+
+def parse_text(text_data):
+    pass
 
 def parse_user_info(user_data):
     keys=user_data.keys()
