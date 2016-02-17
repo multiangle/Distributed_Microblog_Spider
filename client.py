@@ -1084,6 +1084,7 @@ def parse_card_inner(data):
 
 def parse_text(text_data):
     pass
+    #todo
 
 def parse_user_info(user_data):
     keys=user_data.keys()
