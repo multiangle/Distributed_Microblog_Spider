@@ -986,29 +986,57 @@ class parseMicroblogPage():
     def parse_card_inner(self,data):
         msg={}
         keys=list(data.keys())
-        if 'id' in keys:
-            msg['msg_id']=data['idstr']
-        if 'text' in keys:
-            msg['content']=data['text']
+
+        key_array=[
+            # 基本信息--------------------------------------------------------------
+            'idstr',                        #等同于id，是str形式
+            'id',                           #信息id
+            'created_timestamp',          #创建时间戳 ex:1448617509
+            'attitudes_count',            #点赞数
+            'reposts_count',              #转发数
+            'comments_count',             #评论数目
+            'isLongText',                  #是否是长微博（就目前来看，都是False）
+            'source',                      #用户客户端（iphone等）
+            'pid',                         #不明，但是有必要保存，不一定有值
+            'bid',                         #不明，但是有必要保存，不一定有值
+            # 图片信息--------------------------------------------------------------
+            'original_pic',               #图片相关，原始图片地址
+            'bmiddle_pic',                #图片地址，与original_pic相比，只是把large换位bmiddle
+            'thumbnail_pic',              #地址似乎等于pic中图片地址，尺寸是thumb
+        ]
+
+        for item in keys:
+            if item in key_array:
+                msg[item]=data[item]
+
+        if 'id' not in keys:               #糅合 id , mid , msg_id
+            if 'mid' in keys:
+                msg['id']=data['mid']
+            elif 'msg_id' in keys:
+                msg['id']=data['msg_id']
+
+        if 'attitudes_count' not in keys and 'like_count' in keys:
+            msg['attitudes_count']=msg['like_count']
+
         if 'created_at' in keys:
-            msg['time']=data['created_at']
-        if 'reposts_count' in keys:
-            msg['reposts_count']=data['reposts_count']
-        if 'comments_count' in keys:
-            msg['comments_count']=data['comments_count']
-        if 'like_count' in keys:
-            msg['like_count']=data['like_count']
-        if 'created_timestamp' in keys:
-            msg['time_stamp']=data['created_timestamp']
-        if 'user' in keys:
-            msg['user']=self.parse_user_info(data['user'])
-        if 'retweeted_status' in keys:
-            msg['is_retweeted']=True
-            msg['retweeted_info']=self.parse_card_inner(data['retweeted_status'])
-        else:
-            msg['is_retweeted']=False
-        # return msg
-        return data     # todo fbi warning!!!!
+            if data['created_at'].__len__()>14:
+                msg['created_at']=data['created_at']
+            else:
+                if 'created_timestamp' in keys:
+                    stamp=data['created_timestamp']
+                    x=time.localtime(stamp)
+                    str_time=time.strftime('%Y-%m-%d %H:%M',x)
+                    msg['created_at']=str_time
+                else:
+                    msg['created_at']=config.CURRENT_YEAR+'-'+data['created_at']
+
+
+
+
+
+
+        return msg
+        # return data
         #todo  需要处理的内容：text,retweeted,topic_struct,url_struct,page_info
 
     def parse_user_info(self,user_data):
@@ -1035,48 +1063,71 @@ def temp_page_parser(data):  #用来测试网页对应内容的临时程序
     keys=list(data.keys())
     msg={}
     key_array=[
-        'created_at',               #信息创建时间
-        'attitudes_count',          #点赞数
-        'mlevel',            #不明
-        'biz_feature',      #不明
-        'biz_ids',          #不明
-        'source_type',      #不明
-        'hot_weibo_tags',  #不明
-        'isLongText',               #是否是长微博
-        'original_pic',             #图片相关，似乎相关信息可以在pic中找到
-        'mblogtype',        #不明
-        'idstr',                    #等同于id，是str形式
-        'pic_ids',                  #图片id
-        'visible',          #不明
-        'bmiddle_pic',      #不明
-        'pics',                     #如果包含图的话，有该项，包括size,pid,geo,url等
-        'mid',                      #等同于id
-        'pid',               #不明
-        'userType',         #不明
-        'thumbnail_pic',            #地址似乎等于pic中图片地址
-        'favorited',        #不明
-        'attitudes_status',#不明
-        'bid',               #不明
-        'page_type',        #不明
-        'textLength',               #文本长度
-        'source',           #不明
-        'source_allowclick',#不明
-        'expire_time',      #不明
-        'extend_info',      #不明，不过似乎没什么用
-        'mark',              #不明
+        'idstr',                     #等同于id，是str形式
+
         'id',                        #信息id
-        'text',                      #文本信息
+        'mid',                       #等同于id
+        'msg_id',                    #等同于id
+
+        'created_timestamp',       #创建时间戳 ex:1448617509
+        'created_at',               #信息创建时间,有两种形式： 2015-05-02 23:33（往年）以及 02-14 23:33（今年）
+        'time_stamp',                           #与created_at相同
+        'attitudes_count',         #点赞数
+        'like_count',               #点赞数目
         'reposts_count',            #转发数
         'comments_count',           #评论数目
-        'like_count',               #点赞数目
-        'created_timestamp',        #创建时间戳
-        'source_type',      #不明
-        'cardid',          #不明，应该是显示账号等级的，如star_003等等
-        'retweeted_status',         #转发相关
-        'url_struct',        #不明，字典形式
-        'topic_struct',     #不明，似乎是topic结构，是字典 形式
-        'page_info'          #不太明，似乎与多媒体有关，字典形式
+        'isLongText',               #是否是长微博（就目前来看，都是False）
+        #------------------------------------------------------------------------------------------------------------------
+        'original_pic',            #图片相关，原始图片地址
+        #图片地址，如http://ww4.sinaimg.cn/large/8354b547jw1ewo67cuov9j20hs0vkq83.jpg
+        'bmiddle_pic',             #图片地址，与original_pic相比，只是把large换位bmiddle
+        'pic_ids',                  #图片id，是个Array,如"pic_ids" : ["8354b547jw1eydlv12braj20zk0jzwj4", "8354b547jw1eydlv2b3p2j20zk0jzaf4"]
+        'pics',                     #如果包含图的话，有该项，是一个数组，内嵌字典，包括size,pid,geo,url等
+        #  pid 是pic_ids中的元素  |  size 是 thumb180, and so on
+        #  url 是图片地址（是 size和 pid的组合）|
+        #  geo 是一个数组，内涵 width, height, byte, croped(不明)
+        'thumbnail_pic',          #地址似乎等于pic中图片地址，尺寸是thumb
+        #------------------------------------------------------------------------------------------------------------------
+        'source',                   #用户客户端（iphone等）
+        'source_type',             #若source为空，则为2 | 如果不为空，则为1
+        'content',                              #与text相同
+        'pid',                       #不明，但是有必要保存，不一定有值
+        #----------------------------------------------------------------------------------------------------------
+        'userType',         #无用 永远是0
+        'mlevel',            #无用，永远是0
+        'favorited',        #无用，永远是false
+        'attitudes_status',#无用，永远是0
+        'source_allowclick',#无用，永远是0
+        'mblogtype',        #无用，永远是0
+        'visible',          #无用，都一样
+        'textLength',       #无用，文本长度,几乎全为空
+        'like_status',      #无用
+        'extend_info',      #无用
+        'page_type',        #无用，只有一些标着32
+        'truncated',        #无用，表示是否被截断
+        #----------------------------------------------------------------------------------------------------------
+        'bid',                #不明
+        'biz_feature',      #不明，要么是0，要么是4294967300
+        'biz_ids',           #不明
+        'hot_weibo_tags',  #不明，目前来看，都是空数组
+        'expire_time',      #不明
+        'mark',              #不明
+        'filterID',         #不明
+        'cardid',           #不明，应该是显示账号等级的，如star_003等等
+        'picStatus',        #不明
+        #----------------------------------------------------------------------------------------------------------
+        'user',                        #user,内嵌字典，需要单独处理
+        'retweeted_status',          #转发相关，需要单独处理
+        'url_struct',                 #微博中出现了地理位置，视频或者文章或外链时，会出现该项
+        #是个数组，内嵌字典，单独处理
+        'page_info',                  #话题主页，地点主页 等主页信息，为内嵌字典，单独处理
+        'topic_struct',              #topic主页，数组形式，内嵌字典，单独处理
+        'text',                      #文本信息，需要单独处理
+        'geo',                        #地理信息字段，单独处理
+        'url_short',                #短链，需单独处理
+        #----------------------------------------------------------------------------------------------------------
     ]
+
     for item in key_array:
         if item in keys:
             msg[item]=data[item]
