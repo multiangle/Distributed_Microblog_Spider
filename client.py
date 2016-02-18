@@ -26,6 +26,7 @@ import http.cookiejar
 import re
 import random
 from random import Random
+from pymongo import MongoClient
 
 # import from this folder
 import client_config as config
@@ -785,8 +786,8 @@ class getHistory(threading.Thread):
         content_unique=[]      # pick out the repeated content
         content_msgid=[]
         for i in range(contents.__len__()):
-            if contents[i]['msg_id'] not in content_msgid:
-                content_msgid.append(contents[i]['msg_id'])
+            if contents[i]['idstr'] not in content_msgid:
+                content_msgid.append(contents[i]['idstr'])
                 content_unique.append(contents[i])
             else:
                 pass
@@ -799,6 +800,8 @@ class getHistory(threading.Thread):
         FI.save_pickle(content_unique,model_name)
         print('user {id} is fetched, saved'.format(id=self.container_id))
         #
+        save_data_inMongo(content_unique)
+
 
 
         userHistory={           # return the user's history to server
@@ -926,10 +929,11 @@ class getHistory(threading.Thread):
                     continue
 
                 try:
-                    res=parse_blog_page(page)
+                    pmp=parseMicroblogPage()
+                    res=pmp.parse_blog_page(page)
                     # TODO DELETE for test--------
-                    for i in res:
-                        print(json.dumps(i,indent=4))
+                    # for i in res:
+                    #     print(json.dumps(i,indent=4))
                     #---------------------------------
                     self.contents[:]=self.contents[:]+res
                     info_str='Success: Page {url} is done'.format(url=url)
@@ -940,46 +944,91 @@ class getHistory(threading.Thread):
                     info_manager(info_str,type='KEY')
                     print(e)
 
-def parse_blog_page(data):
-    try:        # check if the page is json type
-        data=json.loads(data)
-    except:
-        save_page(data)
-        raise ValueError('Unable to parse page')
+class parseMicroblogPage():
+    def __init__(self):
+        pass
 
-    try:        # check if the page is empty
-        mod_type=data['cards'][0]['mod_type']
-    except:
-        save_page(json.dumps(data))
-        raise ValueError('The type of this page is incorrect')
+    def parse_blog_page(self,data):
+        try:        # check if the page is json type
+            data=json.loads(data)
+        except:
+            save_page(data)
+            raise ValueError('Unable to parse page')
 
-    # debug
-    #TODO to delete
-    temp_name=random_str(randomlength=15)
-    base_dir='F:\\multiangle\\Coding!\\python\\Distribut' \
-            'ed_Microblog_Spider\\html_page\\'
-    path=base_dir+temp_name+'.pkl'
-    FI.save_pickle(data,path)
-    # debug
+        try:        # check if the page is empty
+            mod_type=data['cards'][0]['mod_type']
+        except:
+            save_page(json.dumps(data))
+            raise ValueError('The type of this page is incorrect')
 
+        if 'empty' in mod_type:
+            raise ValueError('This page is empty')
 
-    if 'empty' in mod_type:
-        raise ValueError('This page is empty')
+        try:        # get card group as new data
+            data=data['cards'][0]['card_group']
+        except:
+            save_page(json.dumps(data))
+            raise ValueError('The type of this page is incorrect')
 
-    try:        # get card group as new data
-        data=data['cards'][0]['card_group']
-    except:
-        save_page(json.dumps(data))
-        raise ValueError('The type of this page is incorrect')
+        data_list=[]
+        for block in data:
+            res=self.parse_card_group(block)
+            data_list.append(res)
 
-    data_list=[]
-    for block in data:
-        res=parse_card_group(block)
-        data_list.append(res)
+        return data_list
 
-    return data_list
-    # for item in data_list:
-    #     print(json.dumps(item,indent=4))
+    def parse_card_group(self,data):
+        data=data['mblog']
+        temp_page_parser(data)
+        msg=self.parse_card_inner(data)
+        return msg
+
+    def parse_card_inner(self,data):
+        msg={}
+        keys=list(data.keys())
+        if 'id' in keys:
+            msg['msg_id']=data['idstr']
+        if 'text' in keys:
+            msg['content']=data['text']
+        if 'created_at' in keys:
+            msg['time']=data['created_at']
+        if 'reposts_count' in keys:
+            msg['reposts_count']=data['reposts_count']
+        if 'comments_count' in keys:
+            msg['comments_count']=data['comments_count']
+        if 'like_count' in keys:
+            msg['like_count']=data['like_count']
+        if 'created_timestamp' in keys:
+            msg['time_stamp']=data['created_timestamp']
+        if 'user' in keys:
+            msg['user']=self.parse_user_info(data['user'])
+        if 'retweeted_status' in keys:
+            msg['is_retweeted']=True
+            msg['retweeted_info']=self.parse_card_inner(data['retweeted_status'])
+        else:
+            msg['is_retweeted']=False
+        # return msg
+        return data     # todo fbi warning!!!!
+        #todo  需要处理的内容：text,retweeted,topic_struct,url_struct,page_info
+
+    def parse_user_info(self,user_data):
+        keys=user_data.keys()
+        user={}
+        if 'id' in keys:
+            user['uid']=user_data['id']
+        if 'screen_name' in keys:
+            user['name']=user_data['screen_name']
+        if 'profile_url' in keys:
+            user['user_page']=user_data['profile_url']
+        if 'description' in keys:
+            user['description']=user_data['description']
+        if 'fansNum' in keys:
+            user['fans_num']=user_data['fansNum']
+        return user
+
+    def parse_text(self,text_data):
+        pass
+        #todo
 
 def temp_page_parser(data):  #用来测试网页对应内容的临时程序
     #data 是一个字典格式
@@ -1047,59 +1096,8 @@ def temp_page_parser(data):  #用来测试网页对应内容的临时程序
     if 'text' in keys:
         msg['content']=data['text']
     if 'user' in keys:
-        msg['user']=parse_user_info(data['user'])
-
-def parse_card_group(data):
-    data=data['mblog']
-    temp_page_parser(data)
-    msg=parse_card_inner(data)
-    return msg
-
-def parse_card_inner(data):
-    msg={}
-    keys=list(data.keys())
-    if 'id' in keys:
-        msg['msg_id']=data['idstr']
-    if 'text' in keys:
-        msg['content']=data['text']
-    if 'created_at' in keys:
-        msg['time']=data['created_at']
-    if 'reposts_count' in keys:
-        msg['reposts_count']=data['reposts_count']
-    if 'comments_count' in keys:
-        msg['comments_count']=data['comments_count']
-    if 'like_count' in keys:
-        msg['like_count']=data['like_count']
-    if 'created_timestamp' in keys:
-        msg['time_stamp']=data['created_timestamp']
-    if 'user' in keys:
-        msg['user']=parse_user_info(data['user'])
-    if 'retweeted_status' in keys:
-        msg['is_retweeted']=True
-        msg['retweeted_info']=parse_card_inner(data['retweeted_status'])
-    else:
-        msg['is_retweeted']=False
-    return msg
-    #todo  需要处理的内容：text,retweeted,topic_struct,url_struct,page_info
-
-def parse_text(text_data):
-    pass
-    #todo
-
-def parse_user_info(user_data):
-    keys=user_data.keys()
-    user={}
-    if 'id' in keys:
-        user['uid']=user_data['id']
-    if 'screen_name' in keys:
-        user['name']=user_data['screen_name']
-    if 'profile_url' in keys:
-        user['user_page']=user_data['profile_url']
-    if 'description' in keys:
-        user['description']=user_data['description']
-    if 'fansNum' in keys:
-        user['fans_num']=user_data['fansNum']
-    return user
+        pmp=parseMicroblogPage()
+        msg['user']=pmp.parse_user_info(data['user'])
 
 def random_str(randomlength=8):
     str = ''
@@ -1113,6 +1111,12 @@ def random_str(randomlength=8):
 def save_page(page):
     pass
     #TODO 未完成
+
+def save_data_inMongo(dict_data):
+    client=MongoClient('localhost',27017)
+    db=client['microblog_spider']
+    collection=db.test3
+    result=collection.insert_many(dict_data)
 
 if __name__=='__main__':
     p_pool=[]
