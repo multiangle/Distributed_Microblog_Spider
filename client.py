@@ -313,7 +313,7 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                         'stored in data.pkl'
                 info_manager(string,type='KEY')
 
-        res=res.read().decode('utf8')
+        res=res.read().decode('utf-8')
         if 'success to return user info' in res:
             suc_str='Success:getInfo->run:' \
                     'Success to return user info to server'
@@ -694,7 +694,7 @@ class Connector():
         # request.install_opener(opener)
         result=self.opener.open(req,timeout=timeout)
         # result=opener.open(req,timeout=timeout)
-        return result.read().decode('utf-8')
+        return result.read().decode('utf8')
 
     def change_proxy(self,retry_time=50):
         try:
@@ -906,6 +906,7 @@ class getHistory(threading.Thread):
 
         def __init__(self,task_url,proxy_pool,contents):
             threading.Thread.__init__(self)
+            self.total_task_num=task_url.__len__()
             self.task_url=task_url
             self.proxy_pool=proxy_pool
             self.contents=contents
@@ -916,6 +917,14 @@ class getHistory(threading.Thread):
                 if not self.task_url:
                     break
                 url=self.task_url.pop(0)
+                # print the process
+                task_left=self.task_url.__len__()
+                task_done=self.total_task_num-task_left
+                block_num=50
+                task_done_ratio=int(task_done*block_num/self.total_task_num)
+                task_left_ratio=block_num-task_done_ratio
+                print('■'*task_done_ratio+'□'*task_left_ratio)
+                #------------------
                 time.sleep(max(random.gauss(0.5,0.1),0.05))
                 try:
                     page=self.conn.getData(url,
@@ -979,7 +988,6 @@ class parseMicroblogPage():
 
     def parse_card_group(self,data):
         data=data['mblog']
-        temp_page_parser(data)
         msg=self.parse_card_inner(data)
         return msg
 
@@ -1012,16 +1020,18 @@ class parseMicroblogPage():
             if item in key_array:
                 msg[item]=data[item]
 
-        if 'id' not in keys:               #糅合 id , mid , msg_id
+        #糅合 id , mid , msg_id
+        if 'id' not in keys:
             if 'mid' in keys:
                 msg['id']=data['mid']
             elif 'msg_id' in keys:
                 msg['id']=data['msg_id']
 
         if 'attitudes_count' not in keys and 'like_count' in keys:
-            msg['attitudes_count']=msg['like_count']
+            msg['attitudes_count']=data['like_count']
 
-        if 'created_at' in keys:           # created_at
+        # created_at
+        if 'created_at' in keys:
             if data['created_at'].__len__()>14:
                 msg['created_at']=data['created_at']
             else:
@@ -1033,7 +1043,29 @@ class parseMicroblogPage():
                 else:
                     msg['created_at']=config.CURRENT_YEAR+'-'+data['created_at']
 
-        msg['user']=self.parse_user_info(data['user'])
+        # retweeted_status
+        if 'retweeted_status' in keys:
+            msg['retweeted_status']=self.parse_card_inner(data['retweeted_status'])
+            msg['is_retweeted']=True
+        else:
+            msg['is_retweeted']=False
+
+        # user
+        if 'user' in keys:
+            msg['user']=self.parse_user_info(data['user'])
+            msg['user_id']=msg['user']['uid']
+            msg['user_name']=msg['user']['name']
+
+        # url_struct
+        # msg['url_struct']=self.parse_url_struct(data['url_struct'])
+
+        # page_info
+        if 'page_info' in keys:
+            msg['page_info']=self.parse_page_info(data['page_info'])
+
+        #topic_struct
+        if 'topic_struct' in keys:
+            msg['topic_struct']=self.parse_topic_struct(data['topic_struct'])
 
         return msg
         # return data
@@ -1043,112 +1075,170 @@ class parseMicroblogPage():
         keys=user_data.keys()
         user={}
         if 'id' in keys:
-            user['uid']=user_data['id']
+            user['uid']=str(user_data['id'])
         if 'screen_name' in keys:
             user['name']=user_data['screen_name']
-        if 'profile_url' in keys:
-            user['user_page']=user_data['profile_url']
         if 'description' in keys:
             user['description']=user_data['description']
         if 'fansNum' in keys:
-            user['fans_num']=user_data['fansNum']
+            temp=user_data['fansNum']
+            if isinstance(temp,str):
+                temp=int(temp.replace('万','0000'))
+            user['fans_num']=temp
+        if 'gender' in keys:
+            if user_data['gender']=='m':
+                user['gender']='male'
+            if user_data['gender']=='f':
+                user['gender']='female'
+        if 'profile_url' in keys:
+            user['basic_page']='http://m.weibo.cn'+user_data['profile_url']
+        if 'verified' in keys:
+            user['verified']=user_data['verified']
+        if 'verified_reason' in keys:
+            user['verified_reason']=user_data['verified_reason']
+        if 'statuses_count' in keys:
+            temp=user_data['statuses_count']
+            if isinstance(temp,str):
+                temp=int(temp.replace('万','0000'))
+            user['blog_num']=temp
         return user
 
     def parse_text(self,text_data):
         pass
         #todo
 
-def temp_page_parser(data):  #用来测试网页对应内容的临时程序
-    #data 是一个字典格式
-    keys=list(data.keys())
-    msg={}
-    key_array=[
-        'idstr',                     #等同于id，是str形式
+    def parse_url_struct(self,data):
+        url_struct=[]
+        for block in data:
+            keys=block.keys()
+            new_block=block
+            url_struct.append(new_block)
+        return url_struct
 
-        'id',                        #信息id
-        'mid',                       #等同于id
-        'msg_id',                    #等同于id
+    def parse_page_info(self,data):
+        keys=data.keys()
+        key_array=[
+            'page_url',
+            'page_id',
+            'content2',
+            'tips',
+            'page_pic',
+            'page_desc',
+            'object_type',
+            'page_title',
+            'content1',
+            'type',
+            'object_id'
+        ]
+        msg={}
+        for item in keys:
+            if item in key_array:
+                msg[item]=data[item]
+        return msg
 
-        'created_timestamp',       #创建时间戳 ex:1448617509
-        'created_at',               #信息创建时间,有两种形式： 2015-05-02 23:33（往年）以及 02-14 23:33（今年）
-        'time_stamp',                           #与created_at相同
-        'attitudes_count',         #点赞数
-        'like_count',               #点赞数目
-        'reposts_count',            #转发数
-        'comments_count',           #评论数目
-        'isLongText',               #是否是长微博（就目前来看，都是False）
-        #------------------------------------------------------------------------------------------------------------------
-        'original_pic',            #图片相关，原始图片地址
-        #图片地址，如http://ww4.sinaimg.cn/large/8354b547jw1ewo67cuov9j20hs0vkq83.jpg
-        'bmiddle_pic',             #图片地址，与original_pic相比，只是把large换位bmiddle
-        'pic_ids',                  #图片id，是个Array,如"pic_ids" : ["8354b547jw1eydlv12braj20zk0jzwj4", "8354b547jw1eydlv2b3p2j20zk0jzaf4"]
-        'pics',                     #如果包含图的话，有该项，是一个数组，内嵌字典，包括size,pid,geo,url等
-        #  pid 是pic_ids中的元素  |  size 是 thumb180, and so on
-        #  url 是图片地址（是 size和 pid的组合）|
-        #  geo 是一个数组，内涵 width, height, byte, croped(不明)
-        'thumbnail_pic',          #地址似乎等于pic中图片地址，尺寸是thumb
-        #------------------------------------------------------------------------------------------------------------------
-        'source',                   #用户客户端（iphone等）
-        'source_type',             #若source为空，则为2 | 如果不为空，则为1
-        'content',                              #与text相同
-        'pid',                       #不明，但是有必要保存，不一定有值
-        #----------------------------------------------------------------------------------------------------------
-        'userType',         #无用 永远是0
-        'mlevel',            #无用，永远是0
-        'favorited',        #无用，永远是false
-        'attitudes_status',#无用，永远是0
-        'source_allowclick',#无用，永远是0
-        'mblogtype',        #无用，永远是0
-        'visible',          #无用，都一样
-        'textLength',       #无用，文本长度,几乎全为空
-        'like_status',      #无用
-        'extend_info',      #无用
-        'page_type',        #无用，只有一些标着32
-        'truncated',        #无用，表示是否被截断
-        #----------------------------------------------------------------------------------------------------------
-        'bid',                #不明
-        'biz_feature',      #不明，要么是0，要么是4294967300
-        'biz_ids',           #不明
-        'hot_weibo_tags',  #不明，目前来看，都是空数组
-        'expire_time',      #不明
-        'mark',              #不明
-        'filterID',         #不明
-        'cardid',           #不明，应该是显示账号等级的，如star_003等等
-        'picStatus',        #不明
-        #----------------------------------------------------------------------------------------------------------
-        'user',                        #user,内嵌字典，需要单独处理
-        'retweeted_status',          #转发相关，需要单独处理
-        'url_struct',                 #微博中出现了地理位置，视频或者文章或外链时，会出现该项
-        #是个数组，内嵌字典，单独处理
-        'page_info',                  #话题主页，地点主页 等主页信息，为内嵌字典，单独处理
-        'topic_struct',              #topic主页，数组形式，内嵌字典，单独处理
-        'text',                      #文本信息，需要单独处理
-        'geo',                        #地理信息字段，单独处理
-        'url_short',                #短链，需单独处理
-        #----------------------------------------------------------------------------------------------------------
-    ]
+    def parse_topic_struct(self,data):
+        msg=[]
+        for block in data:
+            keys=block.keys()
+            temp=block
+            if 'topic_title' in keys:
+                temp['topic_url']='http://m.weibo.cn/k/{topic}?from=feed'\
+                    .format(topic=block['topic_title'])
+            msg.append(temp)
+        return msg
 
-    for item in key_array:
-        if item in keys:
-            msg[item]=data[item]
-    all_in=True
-    for item in keys:
-        if item not in key_array:
-            if item!='text' and item!='user' :
-                all_in=False
-                break
-    if not all_in:
-        temp_name=random_str(randomlength=15)
-        base_dir='F:\\multiangle\\Coding!\\python\\Distribut' \
-                 'ed_Microblog_Spider\\html_page\\'
-        path=base_dir+temp_name+'.pkl'
-        FI.save_pickle(data,path)
 
-    if 'text' in keys:
-        msg['content']=data['text']
-    if 'user' in keys:
-        pmp=parseMicroblogPage()
-        msg['user']=pmp.parse_user_info(data['user'])
+# def temp_page_parser(data):  #用来测试网页对应内容的临时程序
+#     #data 是一个字典格式
+#     keys=list(data.keys())
+#     msg={}
+#     key_array=[
+#         'idstr',                     #等同于id，是str形式
+#
+#         'id',                        #信息id
+#         'mid',                       #等同于id
+#         'msg_id',                    #等同于id
+#
+#         'created_timestamp',       #创建时间戳 ex:1448617509
+#         'created_at',               #信息创建时间,有两种形式： 2015-05-02 23:33（往年）以及 02-14 23:33（今年）
+#         'time_stamp',                           #与created_at相同
+#         'attitudes_count',         #点赞数
+#         'like_count',               #点赞数目
+#         'reposts_count',            #转发数
+#         'comments_count',           #评论数目
+#         'isLongText',               #是否是长微博（就目前来看，都是False）
+#         #------------------------------------------------------------------------------------------------------------------
+#         'original_pic',            #图片相关，原始图片地址
+#         #图片地址，如http://ww4.sinaimg.cn/large/8354b547jw1ewo67cuov9j20hs0vkq83.jpg
+#         'bmiddle_pic',             #图片地址，与original_pic相比，只是把large换位bmiddle
+#         'pic_ids',                  #图片id，是个Array,如"pic_ids" : ["8354b547jw1eydlv12braj20zk0jzwj4", "8354b547jw1eydlv2b3p2j20zk0jzaf4"]
+#         'pics',                     #如果包含图的话，有该项，是一个数组，内嵌字典，包括size,pid,geo,url等
+#         #  pid 是pic_ids中的元素  |  size 是 thumb180, and so on
+#         #  url 是图片地址（是 size和 pid的组合）|
+#         #  geo 是一个数组，内涵 width, height, byte, croped(不明)
+#         'thumbnail_pic',          #地址似乎等于pic中图片地址，尺寸是thumb
+#         #------------------------------------------------------------------------------------------------------------------
+#         'source',                   #用户客户端（iphone等）
+#         'source_type',             #若source为空，则为2 | 如果不为空，则为1
+#         'content',                              #与text相同
+#         'pid',                       #不明，但是有必要保存，不一定有值
+#         #----------------------------------------------------------------------------------------------------------
+#         'userType',         #无用 永远是0
+#         'mlevel',            #无用，永远是0
+#         'favorited',        #无用，永远是false
+#         'attitudes_status',#无用，永远是0
+#         'source_allowclick',#无用，永远是0
+#         'mblogtype',        #无用，永远是0
+#         'visible',          #无用，都一样
+#         'textLength',       #无用，文本长度,几乎全为空
+#         'like_status',      #无用
+#         'extend_info',      #无用
+#         'page_type',        #无用，只有一些标着32
+#         'truncated',        #无用，表示是否被截断
+#         #----------------------------------------------------------------------------------------------------------
+#         'bid',                #不明
+#         'biz_feature',      #不明，要么是0，要么是4294967300
+#         'biz_ids',           #不明
+#         'hot_weibo_tags',  #不明，目前来看，都是空数组
+#         'expire_time',      #不明
+#         'mark',              #不明
+#         'filterID',         #不明
+#         'cardid',           #不明，应该是显示账号等级的，如star_003等等
+#         'picStatus',        #不明
+#         #----------------------------------------------------------------------------------------------------------
+#         'user',                        #user,内嵌字典，需要单独处理
+#         'retweeted_status',          #转发相关，需要单独处理
+#         'url_struct',                 #微博中出现了地理位置，视频或者文章或外链时，会出现该项
+#         #是个数组，内嵌字典，单独处理
+#         'page_info',                  #话题主页，地点主页 等主页信息，为内嵌字典，单独处理
+#         'topic_struct',              #topic主页，数组形式，内嵌字典，单独处理
+#         'text',                      #文本信息，需要单独处理
+#         'geo',                        #地理信息字段，单独处理
+#         'url_short',                #短链，需单独处理
+#         #----------------------------------------------------------------------------------------------------------
+#     ]
+#
+#     for item in key_array:
+#         if item in keys:
+#             msg[item]=data[item]
+#     all_in=True
+#     for item in keys:
+#         if item not in key_array:
+#             if item!='text' and item!='user' :
+#                 all_in=False
+#                 break
+#     if not all_in:
+#         temp_name=random_str(randomlength=15)
+#         base_dir='F:\\multiangle\\Coding!\\python\\Distribut' \
+#                  'ed_Microblog_Spider\\html_page\\'
+#         path=base_dir+temp_name+'.pkl'
+#         FI.save_pickle(data,path)
+#
+#     if 'text' in keys:
+#         msg['content']=data['text']
+#     if 'user' in keys:
+#         pmp=parseMicroblogPage()
+#         msg['user']=pmp.parse_user_info(data['user'])
 
 def random_str(randomlength=8):
     str = ''
