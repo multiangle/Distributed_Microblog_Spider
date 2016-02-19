@@ -1003,6 +1003,9 @@ class parseMicroblogPage():
             'original_pic',               #图片相关，原始图片地址
             'bmiddle_pic',                #图片地址，与original_pic相比，只是把large换位bmiddle
             'thumbnail_pic',              #地址似乎等于pic中图片地址，尺寸是thumb
+            'pic_ids',                     #图片id，是个Array
+            'pics',                        #如果包含图的话，有该项，是一个数组，内嵌字典，
+                                            # 包括size,pid,geo,url等
         ]
 
         for item in keys:
@@ -1018,7 +1021,7 @@ class parseMicroblogPage():
         if 'attitudes_count' not in keys and 'like_count' in keys:
             msg['attitudes_count']=msg['like_count']
 
-        if 'created_at' in keys:
+        if 'created_at' in keys:           # created_at
             if data['created_at'].__len__()>14:
                 msg['created_at']=data['created_at']
             else:
@@ -1030,10 +1033,7 @@ class parseMicroblogPage():
                 else:
                     msg['created_at']=config.CURRENT_YEAR+'-'+data['created_at']
 
-
-
-
-
+        msg['user']=self.parse_user_info(data['user'])
 
         return msg
         # return data
