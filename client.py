@@ -26,7 +26,6 @@ import http.cookiejar
 import re
 import random
 from random import Random
-from pymongo import MongoClient
 
 # import from this folder
 import client_config as config
@@ -806,15 +805,15 @@ class getHistory(threading.Thread):
             else:
                 pass
 
-        # for test
-        #todo to delete
-        model_name='F:\\multiangle\\Coding!\\python\\' \
-                   'Distributed_Microblog_Spider\\{id}.pkl'\
-            .format(id=self.container_id)
-        FI.save_pickle(content_unique,model_name)
-        print('user {id} is fetched, saved'.format(id=self.container_id))
-        #
-        save_data_inMongo(content_unique)
+        # # for test
+        # #todo to delete
+        # model_name='F:\\multiangle\\Coding!\\python\\' \
+        #            'Distributed_Microblog_Spider\\{id}.pkl'\
+        #     .format(id=self.container_id)
+        # FI.save_pickle(content_unique,model_name)
+        # print('user {id} is fetched, saved'.format(id=self.container_id))
+        # #
+        # save_data_inMongo(content_unique)
 
 
 
@@ -1178,12 +1177,6 @@ def random_str(randomlength=8):
 def save_page(page):
     pass
     #TODO 未完成
-
-def save_data_inMongo(dict_data):
-    client=MongoClient('localhost',27017)
-    db=client['microblog_spider']
-    collection=db.test3
-    result=collection.insert_many(dict_data)
 
 if __name__=='__main__':
     p_pool=[]

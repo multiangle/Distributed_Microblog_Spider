@@ -25,6 +25,7 @@ __author__ = 'multiangle'
 # import python package
 import threading
 import time
+from pymongo import MongoClient
 
 # import from outer package
 import tornado.web
@@ -254,6 +255,7 @@ class HistoryReturn(tornado.web.RequestHandler):
         try:
             user_history=self.get_argument('user_history')
             user_history=eval(user_history)
+            save_data_inMongo(user_history)
             self.write('success to return user history')
             self.finish()
         except:
@@ -262,6 +264,12 @@ class HistoryReturn(tornado.web.RequestHandler):
             return
 
         #TODO 把相对应的内容存入mongodb
+
+def save_data_inMongo(dict_data):
+    client=MongoClient('localhost',27017)
+    db=client['microblog_spider']
+    collection=db.test3
+    result=collection.insert_many(dict_data)
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()         # proxy thread
