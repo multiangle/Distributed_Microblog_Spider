@@ -1128,8 +1128,55 @@ class parseMicroblogPage():
             user['blog_num']=temp
         return user
 
-    def parse_text(self,text_data):
-        return text_data
+    def parse_text(self,text):
+        msg={}
+
+        # data-url
+        data_url=re.findall(self.p_link,text)
+        if data_url.__len__()>0:
+            data_url_list=[]
+            for block in data_url:
+                temp=self.parse_text_data_url(block)
+                data_url_list.append(temp)
+            msg['data_url']=data_url_list
+        text=re.sub(self.p_link,'',text)
+
+        # topic
+        topic=re.findall(self.p_topic,text)
+        if topic.__len__()>0:
+            topic_list=[]
+            for block in topic:
+                temp=self.parse_text_topic(block)
+                topic_list.append(temp)
+            msg['topic']=topic_list
+        text=re.sub(self.p_topic,'',text)
+
+        # moiton
+        motion=[]
+        res1=re.findall(self.p_face_i,text)
+        for item in res1:
+            temp=re.findall(self.p_face,item)[0]
+            motion.append(temp)
+        text=re.sub(self.p_face_i,'',text)
+
+        res2=re.findall(self.p_face,text)
+        motion=motion+res2
+        if motion.__len__()>0:
+            msg['motion']=motion
+        text=re.sub(self.p_face,'',text)
+
+        # user
+        user=[]
+        user_res=re.findall(self.p_user,text)
+        if user_res.__len__()>0:
+            for item in user_res:
+                temp=self.parse_text_user(item)
+                user.append(temp)
+        msg['user']=user
+        text=re.sub(self.p_user,'@',text)
+
+        msg['left_content']=text.split('//')
+        return msg
 
     def parse_text_data_url(self,text):
         link_data={}
@@ -1188,7 +1235,7 @@ class parseMicroblogPage():
         data['type']='user'
 
         try:
-            data['title']=re.findall(r'>.+?<',text)[0][1:-1]
+            data['title']=re.findall(r'>.+?<',text)[0][2:-1]
             data['url']= 'http://m.weibo.cn'+re.findall(r'href=".+?"',text)[0][6:-1]
         except:
             pass
