@@ -815,8 +815,6 @@ class getHistory(threading.Thread):
         # #
         # save_data_inMongo(content_unique)
 
-
-
         userHistory={           # return the user's history to server
             'user_history':content_unique
         }
@@ -968,7 +966,15 @@ class getHistory(threading.Thread):
 
 class parseMicroblogPage():
     def __init__(self):
-        pass
+        self.p_face=re.compile(r'\[.+?\]')
+        self.p_face_i=re.compile(r'<i.+?</i>')
+        self.p_user=re.compile(r'<a href.+?</a>')
+        self.p_topic=re.compile(r'<a class="k".+?</a>')
+        self.p_reply=re.compile(r'回复.+?//')
+        self.p_link=re.compile(r'<a data-url.+?</a>')
+        self.p_img=re.compile(r'<img.+?>')
+        self.p_span=re.compile(r'<span.+?</span>')
+        self.p_http_png=re.compile(r'http://.+?png')
 
     def parse_blog_page(self,data):
         try:        # check if the page is json type
@@ -1124,6 +1130,70 @@ class parseMicroblogPage():
 
     def parse_text(self,text_data):
         return text_data
+
+    def parse_text_data_url(self,text):
+        link_data={}
+        link_data['type']='data_url'
+
+        try:
+            res_face=re.findall(self.p_face_i,text)[0]
+            res_img=re.findall(self.p_img,res_face)[0]
+            res_http=re.findall(self.p_http_png,res_img)[0]
+            link_data['img']=res_http
+
+            res_class=re.findall(r'<i.+?>',text)[0]
+            link_data['class']=res_class
+
+            text=re.sub(self.p_face_i,'',text)
+        except:
+            pass
+
+        try:
+            res_span=re.findall(self.p_span,text)[0]
+            title=re.findall(r'>.+?<',res_span)[0][1:-1]
+            link_data['title']=title
+            text=re.sub(self.p_span,'',text)
+        except:
+            pass
+
+        try:
+            data_url=re.findall(r'data-url=".+?"',text)[0]
+            data_url=re.findall(r'".+?"',data_url)[0][1:-1]
+            link_data['short_url']=data_url
+
+            url=re.findall(r'href=".+?"',text)[0][6:-1]
+            link_data['url']=url
+        except:
+            pass
+
+        # print(text)
+        # print(json.dumps(link_data,indent=4))
+        return link_data
+
+    def parse_text_topic(self,text):
+        data={}
+
+        try:
+            data['type']='topic'
+            data['class']=re.findall(r'class=".+?"',text)[0][7:-1]
+            data['title']=re.findall(r'>.+?<',text)[0][1:-1]
+            data['url']='http://m.weibo.cn'+re.findall(r'href=".+?"',text)[0][6:-1]
+        except:
+            pass
+
+        return data
+
+    def parse_text_user(self,text):
+        data={}
+        data['type']='user'
+
+        try:
+            data['title']=re.findall(r'>.+?<',text)[0][1:-1]
+            data['url']= 'http://m.weibo.cn'+re.findall(r'href=".+?"',text)[0][6:-1]
+        except:
+            pass
+
+        return data
 
     def parse_url_struct(self,data):
         url_struct=[]
