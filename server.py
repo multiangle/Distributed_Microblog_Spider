@@ -120,11 +120,18 @@ class TaskHandler(tornado.web.RequestHandler):
         if task_id==2:      # this part is in test
             dbi=MySQL_Interface()
             query='select container_id,blog_num from user_info_table ' \
-                  'order by rand() limit 1 ;'
+                  'where (isGettingBlog is null and update_time is null) ' \
+                  'order by fans_num desc limit 1 ;'
+            # query='select container_id,blog_num from user_info_table ' \
+            #       'order by rand() limit 1 ;'
             [container_id,blog_num]=dbi.select_asQuery(query)[0]
             self.write('{c_id};{blog},history'
                        .format(c_id=container_id,blog=blog_num))
             self.finish()
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            query="update user_info_table set isGettingBlog=\'{t_time}\' where container_id={cid} ;"\
+                .format(t_time=time_stick,cid=container_id)
+            dbi.update_asQuery(query)
 
         if task_id==3:
             pass
@@ -252,18 +259,62 @@ class InfoReturn(tornado.web.RequestHandler):
 
 class HistoryReturn(tornado.web.RequestHandler):
     def post(self):
+
+        # 从客户端获取信息
         try:
             user_history=self.get_argument('user_history')
+            latest_time=self.get_argument('latest_time')
+            latest_timestamp=self.get_argument('latest_timestamp')
+            container_id=self.get_argument('container_id')
             user_history=eval(user_history)
-            save_data_inMongo(user_history)
             self.write('success to return user history')
             self.finish()
-        except:
+        except Exception as e:
             self.write('fail to return user history')
             self.finish()
+            print('Error:server-HistoryReturn:'
+                  'Unable to get value from http package,Reason:')
+            print(e)
             return
 
-        #TODO 把相对应的内容存入mongodb
+        # 连接
+        try:
+            dbi=MySQL_Interface()
+        except:
+            print('Error:server-HistoryReturn:'
+                  'Unable to connect to MySQL')
+
+        # 从MYSQL获取该用户相关信息
+        try:
+            query='select * from user_info_table where container_id=\'{cid}\''\
+                .format(cid=container_id)
+            user_info=dbi.select_asQuery(query)[0]
+            col_name=dbi.get_col_name('user_info_table')
+        except Exception as e:
+            print('Error:server-HistoryReturn:'
+                  'No such user in MySQL.user_info_table,Reason:')
+            print(e)
+
+        # 将数据存入Mongodb以后将相关信息存入mysql，并将isGettingBlog字段设为空
+        try:
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            if user_info[col_name.index('update_time')]:
+                save_data_inMongo(user_history)
+                query='update user_info_table set ' \
+                      'update_time=\'{up_time}\',' \
+                      'latest_blog=\'{latest_blog}\',' \
+                      'isGettingBlog=null ' \
+                      'where container_id=\'{cid}\';'\
+                    .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
+                dbi.update_asQuery(query)
+            else:
+                query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\''\
+                    .format(cid=container_id)
+                dbi.update_asQuery(query)
+        except Exception as e:
+            print('Error:server-HistoryReturn:'
+                  'Unable to update data in MySQL.user_info_tabe,Reason:')
+            print(e)
 
 def save_data_inMongo(dict_data):
     client=MongoClient('localhost',27017)

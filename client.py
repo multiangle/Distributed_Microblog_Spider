@@ -815,8 +815,22 @@ class getHistory(threading.Thread):
         # #
         # save_data_inMongo(content_unique)
 
+        timestamp_list=[]
+        for item in content_unique:
+            try:
+                temp=item['created_timestamp']
+                timestamp_list.append(temp)
+            except:
+                pass
+        latest_timestamp=max(timestamp_list)
+        time_temp=time.localtime(latest_timestamp)
+        latest_time=time.strftime('%Y-%m-%d %H:%M:%S',time_temp)
+
         userHistory={           # return the user's history to server
-            'user_history':content_unique
+            'user_history':content_unique,
+            'latest_timestamp':latest_timestamp,
+            'latest_time':latest_time,
+            'container_id':self.container_id
         }
         try:
             data=parse.urlencode(userHistory).encode('utf8')
@@ -1172,7 +1186,7 @@ class parseMicroblogPage():
             for item in user_res:
                 temp=self.parse_text_user(item)
                 user.append(temp)
-        msg['user']=user
+            msg['user']=user
         text=re.sub(self.p_user,'@',text)
 
         msg['left_content']=text.split('//')

@@ -52,7 +52,6 @@ class deal_cache_attends(threading.Thread):
         self.dbi=dbi
         self.bf=BloomFilter()
 
-
     def  run(self):
         bag=[]
         uid_bag=[]              #与bag类似，只不过存储uid
@@ -119,6 +118,8 @@ class deal_cache_user_info(threading.Thread):
                         line[cache_user_info_col.index(col)] if col in cache_user_info_col
                         else time_stick if col=='insert_time'
                         else None if col=='update_time'
+                        else None if col=='latest_blog'
+                        else None if col=='isGettingBlog'
                         else ''
                         for col in user_info_table_col
                     ] for line in res]
@@ -143,6 +144,8 @@ class deal_cache_user_info(threading.Thread):
             self.dbi.conn.commit()
 
 class deal_fetching_user(threading.Thread):
+    #定期清理获取时间过长的部分
+
     def __init__(self):
         threading.Thread.__init__(self)
         self.dbi=MySQL_Interface()
@@ -181,6 +184,8 @@ class control_ready_table(threading.Thread):
 class DB_manager(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
+
+        # p1,p2,p3,p4 控制内容1
         self.p1=deal_cache_attends()
         self.p2=deal_cache_user_info()
         self.p3=deal_fetching_user()
