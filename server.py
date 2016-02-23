@@ -299,6 +299,8 @@ class HistoryReturn(tornado.web.RequestHandler):
         # 将数据存入Mongodb以后将相关信息存入mysql，并将isGettingBlog字段设为空
         try:
             blog_len=user_history.__len__()
+            wanted_blog_len=user_info[col_name.index('blog_num')]
+            blog_accuracy=blog_len/wanted_blog_len
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
             if not user_info[col_name.index('update_time')]:
                 save_data_inMongo(user_history)
@@ -313,6 +315,11 @@ class HistoryReturn(tornado.web.RequestHandler):
                 query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\''\
                     .format(cid=container_id)
                 dbi.update_asQuery(query)
+
+            query='insert into accuracy_table values ({acc},\'{t_s}\') ;'\
+                .format(acc=blog_accuracy,t_s=time_stick)
+            dbi.insert_asQuery(query)
+
             print('Success: insert user into MongoDB, the num of data is {len}'
                   .format(len=blog_len))
         except Exception as e:
