@@ -269,6 +269,7 @@ class HistoryReturn(tornado.web.RequestHandler):
             user_history=eval(user_history)
             self.write('success to return user history')
             self.finish()
+            print('Success: to get data from web')
         except Exception as e:
             self.write('fail to return user history')
             self.finish()
@@ -297,8 +298,9 @@ class HistoryReturn(tornado.web.RequestHandler):
 
         # 将数据存入Mongodb以后将相关信息存入mysql，并将isGettingBlog字段设为空
         try:
+            blog_len=user_history.__len__()
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            if user_info[col_name.index('update_time')]:
+            if not user_info[col_name.index('update_time')]:
                 save_data_inMongo(user_history)
                 query='update user_info_table set ' \
                       'update_time=\'{up_time}\',' \
@@ -311,6 +313,8 @@ class HistoryReturn(tornado.web.RequestHandler):
                 query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\''\
                     .format(cid=container_id)
                 dbi.update_asQuery(query)
+            print('Success: insert user into MongoDB, the num of data is {len}'
+                  .format(len=blog_len))
         except Exception as e:
             print('Error:server-HistoryReturn:'
                   'Unable to update data in MySQL.user_info_tabe,Reason:')
