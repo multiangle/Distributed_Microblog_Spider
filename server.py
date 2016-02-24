@@ -304,11 +304,16 @@ class HistoryReturn(tornado.web.RequestHandler):
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
             if not user_info[col_name.index('update_time')]:
                 save_data_inMongo(user_history)
+                # query='update user_info_table set ' \
+                #       'update_time=\'{up_time}\',' \
+                #       'latest_blog=\'{latest_blog}\',' \
+                #       'isGettingBlog=null ' \
+                #       'where container_id=\'{cid}\';'\
+                #     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
                 query='update user_info_table set ' \
                       'update_time=\'{up_time}\',' \
-                      'latest_blog=\'{latest_blog}\',' \
-                      'isGettingBlog=null ' \
-                      'where container_id=\'{cid}\';'\
+                      'latest_blog=\'{latest_blog}\'' \
+                      'where container_id=\'{cid}\';' \
                     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
                 dbi.update_asQuery(query)
             else:
