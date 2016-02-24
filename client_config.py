@@ -8,8 +8,8 @@ __author__ = 'multiangle'
 #========================================================
 
 # 全局参数              global config info
-PROCESS_NUM             =3                #进程数目           number of process
-THREAD_NUM              =20                #每个进程最多线程   max thread num per process
+PROCESS_NUM             =1                #进程数目           number of process
+THREAD_NUM              =30                #每个进程最多线程   max thread num per process
 NOMAL_INFO_PRINT        =True            #普通信息显示       if print normal information
 KEY_INFO_PRINT          =True            #关键信息显示       if print key information
 NORMAL_INFO_LOG         =True            #普通信息日志       if output normal info to log
@@ -24,7 +24,7 @@ CURRENT_YEAR            =2016
 
 ####-------------------------------------####
 
-SERVER_URL='http://multiangle.imwork.net:10407' #服务器地址,端口号
+SERVER_URL='http://multiangle.imwork.net:13104' #服务器地址,端口号
 # SERVER_URL='http://121.42.163.195:8000'
 # SERVER_URL='http://127.0.0.1:8000' #服务器地址,端口号
 
