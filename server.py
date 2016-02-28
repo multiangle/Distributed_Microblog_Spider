@@ -117,7 +117,7 @@ class TaskHandler(tornado.web.RequestHandler):
                 .format(t_time=time_stick,uid=uid)
             dbi.update_asQuery(query)
 
-        if task_id==2:      # this part is in test
+        if task_id==2:      # get the history microblog of a certain user
             dbi=MySQL_Interface()
             query='select container_id,blog_num from user_info_table ' \
                   'where (isGettingBlog is null and update_time is null) ' \
@@ -133,8 +133,12 @@ class TaskHandler(tornado.web.RequestHandler):
                 .format(t_time=time_stick,cid=container_id)
             dbi.update_asQuery(query)
 
-        if task_id==3:
-            pass
+        if task_id==3:   # this part is in test
+            dbi=MySQL_Interface()
+            current_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            query='select uid from user_info_table where update_time<\'{target_time}\'' # todo to delete
+            # query='select uid from user_info_table where update_time<\'{target_time}\' and isGettingBlog is null limit {batch}'
+
             #TODO update content
 
     def task_assign(self,uuid):
