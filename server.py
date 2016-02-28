@@ -136,10 +136,22 @@ class TaskHandler(tornado.web.RequestHandler):
         if task_id==3:   # this part is in test
             dbi=MySQL_Interface()
             current_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            query='select uid from user_info_table where update_time<\'{target_time}\'' # todo to delete
-            # query='select uid from user_info_table where update_time<\'{target_time}\' and isGettingBlog is null limit {batch}'
-
-            #TODO update content
+            target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24)) #提早一天
+            query='select uid,update_time from user_info_table ' \
+                  'where update_time<\'{target_time}\' and isGettingBlog is null limit {batch}'\
+                .format(target_time=target_time_stick,batch=10)
+            res=dbi.select_asQuery(query)
+            res=[[line[0],int(time.mktime(time.strptime(str(line[1]),'%Y-%m-%d %H:%M:%S')))] for line in res]
+            res=[line[0]+'-'+str(line[1]) for line in res]
+            inn=''
+            for item in res:
+                inn+=item+';'
+            inn=inn[0:-1]
+            # uid-stamp;uid-timestamp;...;,update  (the formation of order)
+            commend='{list},update'.format(list=inn)
+            self.write(commend)
+            self.finish()
+            # todo 还有取出内容后对数据库的处理问题没解决，不可忘记
 
     def task_assign(self,uuid):
         t_1=['1']         # get social web
