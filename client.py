@@ -26,6 +26,7 @@ import http.cookiejar
 import re
 import random
 from random import Random
+import math
 
 # import from this folder
 import client_config as config
@@ -826,58 +827,125 @@ class getHistory(threading.Thread):
         time_temp=time.localtime(latest_timestamp)
         latest_time=time.strftime('%Y-%m-%d %H:%M:%S',time_temp)
 
-        userHistory={           # return the user's history to server
-            'user_history':content_unique,
-            'latest_timestamp':latest_timestamp,
-            'latest_time':latest_time,
-            'container_id':self.container_id
-        }
-        try:
-            data=parse.urlencode(userHistory).encode('utf8')
-        except:
-            err_str='error:getHistory->run: ' \
-                    'unable to parse uesr history data'
-            info_manager(err_str,type='KEY')
-            raise TypeError('Unable to parse user history')
+        ret_batchsize=5000
+        if content_unique.__len__()<ret_batchsize:   # 如果行数大于5000，则需要进行分块传输
+            userHistory={           # return the user's history to server
+                'user_history':content_unique,
+                'latest_timestamp':latest_timestamp,
+                'latest_time':latest_time,
+                'container_id':self.container_id,
+                'isDivided':0   # 0 表示未分块, 1 表示有分块
+            }
+            try:
+                data=parse.urlencode(userHistory).encode('utf8')
+            except:
+                err_str='error:getHistory->run: ' \
+                        'unable to parse uesr history data'
+                info_manager(err_str,type='KEY')
+                raise TypeError('Unable to parse user history')
 
-        url='{url}/history_return'.format(url=config.SERVER_URL)
-        req=request.Request(url,data)
-        opener=request.build_opener()
+            url='{url}/history_return'.format(url=config.SERVER_URL)
+            req=request.Request(url,data)
+            opener=request.build_opener()
 
-        try:
-            res=opener.open(req)
-        except:
-            times=0
+            try:
+                res=opener.open(req)
+            except:
+                times=0
 
-            while times<5:
-                times+=1
-                time.sleep(3)
-                try:
-                    res=opener.open(req)
-                    break
-                except:
-                    warn_str='warn:getHistory->run:' \
-                             'unable to return history to server ' \
-                             'try {num} times'.format(num=times)
-                    info_manager(warn_str,type='NORMAL')
-            if times==5:
+                while times<5:
+                    times+=1
+                    time.sleep(3)
+                    try:
+                        res=opener.open(req)
+                        break
+                    except:
+                        warn_str='warn:getHistory->run:' \
+                                 'unable to return history to server ' \
+                                 'try {num} times'.format(num=times)
+                        info_manager(warn_str,type='NORMAL')
+                if times==5:
+                    FI.save_pickle(contents,'data.pkl')
+                    string='warn: getHistory->run: ' \
+                           'get user history , but unable to connect server,' \
+                           'stored in data.pkl'
+                    info_manager(string,type='KEY')
+
+            res=res.read().decode('utf8')
+            if 'success to return user history'in res:
+                suc_str='Success:getHistory->run:' \
+                        'Success to return user history to server'
+                info_manager(suc_str,type='KEY')
+            else:
                 FI.save_pickle(contents,'data.pkl')
                 string='warn: getHistory->run: ' \
-                       'get user history , but unable to connect server,' \
+                       'get user history, but unable to connect server,' \
                        'stored in data.pkl'
                 info_manager(string,type='KEY')
-
-        res=res.read().decode('utf8')
-        if 'success to return user history'in res:
-            suc_str='Success:getHistory->run:' \
-                    'Success to return user history to server'
-            info_manager(suc_str,type='KEY')
         else:
-            FI.save_pickle(contents,'data.pkl')
-            string='warn: getHistory->run: ' \
-                   'get user history, but unable to connect server,' \
-                   'stored in data.pkl'
-            info_manager(string,type='KEY')
+
+            ret_block=math.ceil(content_unique/ret_batchsize)
+            for block_num in range(ret_block):
+                userHistory={
+                    'user_history':content_unique[
+                                   block_num*ret_batchsize:
+                                   min((block_num+1)*ret_batchsize-1,content_unique.__len__()-1)
+                    ],
+                    'latest_timestamp':latest_timestamp,
+                    'latest_time':latest_time,
+                    'container_id':self.container_id,
+                    'isDivided':1,   # 0 表示未分块, 1 表示有分块
+                    'block_num':ret_block,
+                    'current_block':block_num
+                }
+
+                try:
+                    data=parse.urlencode(userHistory).encode('utf8')
+                except:
+                    err_str='error:getHistory->run: ' \
+                            'unable to parse uesr history data'
+                    info_manager(err_str,type='KEY')
+                    raise TypeError('Unable to parse user history')
+
+                url='{url}/history_return'.format(url=config.SERVER_URL)
+                req=request.Request(url,data)
+                opener=request.build_opener()
+
+                try:
+                    res=opener.open(req)
+                except:
+                    times=0
+
+                    while times<5:
+                        times+=1
+                        time.sleep(3)
+                        try:
+                            res=opener.open(req)
+                            break
+                        except:
+                            warn_str='warn:getHistory->run:' \
+                                     'unable to return history to server ' \
+                                     'try {num} times'.format(num=times)
+                            info_manager(warn_str,type='NORMAL')
+                    if times==5:
+                        FI.save_pickle(contents,'data.pkl')
+                        string='warn: getHistory->run: ' \
+                               'get user history , but unable to connect server,' \
+                               'stored in data.pkl'
+                        info_manager(string,type='KEY')
+
+                res=res.read().decode('utf8')
+
+                if 'success to return user history'in res:
+                    suc_str='Success:getHistory->run:' \
+                            'Success to return user history to server'
+                    info_manager(suc_str,type='KEY')
+                else:
+                    FI.save_pickle(contents,'data.pkl')
+                    string='warn: getHistory->run: ' \
+                           'get user history, but unable to connect server,' \
+                           'stored in data.pkl'
+                    info_manager(string,type='KEY')
 
         self.return_proxy()
 
