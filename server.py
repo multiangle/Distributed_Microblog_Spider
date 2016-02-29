@@ -141,7 +141,8 @@ class TaskHandler(tornado.web.RequestHandler):
                   'where update_time<\'{target_time}\' and isGettingBlog is null limit {batch}'\
                 .format(target_time=target_time_stick,batch=10)
             res=dbi.select_asQuery(query)
-            res=[[line[0],int(time.mktime(time.strptime(str(line[1]),'%Y-%m-%d %H:%M:%S')))] for line in res]
+            res=[[line[0],int(time.mktime(line[1].timetuple()))] for line in res]
+            # res=[[line[0],int(time.mktime(time.strptime(str(line[1]),'%Y-%m-%d %H:%M:%S')))] for line in res]
             res=[line[0]+'-'+str(line[1]) for line in res]
             inn=''
             for item in res:
@@ -282,7 +283,11 @@ class HistoryReturn(tornado.web.RequestHandler):
             latest_time=self.get_argument('latest_time')
             latest_timestamp=self.get_argument('latest_timestamp')
             container_id=self.get_argument('container_id')
+            isDivided=self.get_argument('isDivided')
             user_history=eval(user_history)
+            if isDivided==1 or isDivided=='1' :
+                block_num=self.get_argument('block_num')
+                current_block=self.get_argument('current_block')
             self.write('success to return user history')
             self.finish()
             print('Success: to get data from web')
@@ -293,6 +298,7 @@ class HistoryReturn(tornado.web.RequestHandler):
                   'Unable to get value from http package,Reason:')
             print(e)
             return
+
 
         # 连接
         try:

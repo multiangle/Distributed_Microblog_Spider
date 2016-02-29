@@ -806,16 +806,6 @@ class getHistory(threading.Thread):
             else:
                 pass
 
-        # # for test
-        # #todo to delete
-        # model_name='F:\\multiangle\\Coding!\\python\\' \
-        #            'Distributed_Microblog_Spider\\{id}.pkl'\
-        #     .format(id=self.container_id)
-        # FI.save_pickle(content_unique,model_name)
-        # print('user {id} is fetched, saved'.format(id=self.container_id))
-        # #
-        # save_data_inMongo(content_unique)
-
         timestamp_list=[]
         for item in content_unique:
             try:
@@ -885,7 +875,10 @@ class getHistory(threading.Thread):
         else:
 
             ret_block=math.ceil(content_unique/ret_batchsize)
-            for block_num in range(ret_block):
+            task_list=[x for x in range(ret_block)]
+            while task_list:
+            # for block_num in range(ret_block):
+                block_num=task_list.pop(0)
                 userHistory={
                     'user_history':content_unique[
                                    block_num*ret_batchsize:
@@ -928,27 +921,29 @@ class getHistory(threading.Thread):
                                      'try {num} times'.format(num=times)
                             info_manager(warn_str,type='NORMAL')
                     if times==5:
-                        FI.save_pickle(contents,'data.pkl')
+                        task_list.append(block_num)
                         string='warn: getHistory->run: ' \
                                'get user history , but unable to connect server,' \
-                               'stored in data.pkl'
+                               'this block is put in the end of task list'
                         info_manager(string,type='KEY')
 
                 res=res.read().decode('utf8')
 
                 if 'success to return user history'in res:
                     suc_str='Success:getHistory->run:' \
-                            'Success to return user history to server'
+                            'Success to return part {num} of history to server'\
+                        .format(num=block_num)
                     info_manager(suc_str,type='KEY')
                 else:
-                    FI.save_pickle(contents,'data.pkl')
                     string='warn: getHistory->run: ' \
                            'get user history, but unable to connect server,' \
                            'stored in data.pkl'
                     info_manager(string,type='KEY')
+            string='Success:getHistory->run:' \
+                   'Success to return ALL history to server'
+            info_manager(string,type='KEY')
 
         self.return_proxy()
-
         os._exit(0)
 
     def return_proxy(self):
