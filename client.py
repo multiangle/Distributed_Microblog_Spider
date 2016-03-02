@@ -774,10 +774,10 @@ class getHistory(threading.Thread):
             # proceed counter ,report the proceed
             proceed_count+=1
             if proceed_count>5:
-                task_left=task_url.__len__()
-                task_done=page_num-task_left
+                task_done=max(0,contents.__len__())
+                task_left=max(0,page_num*10-task_done)
                 block_num=40
-                task_done_ratio=int(task_done*block_num/page_num)
+                task_done_ratio=min(max(0,int(task_done*block_num/(task_done+task_left))),block_num)
                 task_left_ratio=block_num-task_done_ratio
                 print('■'*task_done_ratio+'□'*task_left_ratio)
                 proceed_count=0
@@ -817,7 +817,15 @@ class getHistory(threading.Thread):
         time_temp=time.localtime(latest_timestamp)
         latest_time=time.strftime('%Y-%m-%d %H:%M:%S',time_temp)
 
-        ret_batchsize=5000
+        ret_batchsize=500000
+        # todo  have to delete!!!!------------------------------------
+        content_unique=content_unique[0:min(content_unique.__len__()-1,10)]
+        from pymongo import MongoClient
+        client=MongoClient('localhost',27017)
+        db=client['microblog_spider']
+        collection=db.test3
+        result=collection.insert_many(content_unique)
+        #------------------------------------------------------------------------
         if content_unique.__len__()<ret_batchsize:   # 如果行数大于5000，则需要进行分块传输
             userHistory={           # return the user's history to server
                 'user_history':content_unique,
