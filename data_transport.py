@@ -5,6 +5,8 @@ import urllib.parse as parse
 import urllib.request as request
 import time
 
+# todo 线程调节那块需要补充 ， 当数据小时，自动调节线程，避免线程空转
+
 class upload_list():
     def __init__(self,data,url,setting):
         # data : the formation of data should be a list

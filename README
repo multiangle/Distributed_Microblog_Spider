@@ -1,5 +1,5 @@
 =========================================================================================================
-The component and details of the project(__edition_0.5_)
+The component and details of the project(__edition_0.6_)
 ---------------------------------------------------------------------------------------------------------
 This is a Sina Weibo Spider archieved by server terminal and client terminal.
 The Server terminal mainly deal with 3 tasks.
@@ -25,7 +25,8 @@ The Server terminal mainly deal with 3 tasks.
 ==========================================================================================================
 
 UPDATE HISTORY:
-
+    _0.6_   :   add a data server to avoid the broken of server. And the data of weibo is translated in
+                small parts
     _0.5_   :   add the function of scratching the history of certain user
     _0.4_   :   if the average proxy size less than 30, refuse to assignment task to client
     _0.3_   :   drop the attends whoes fans num less than 1000

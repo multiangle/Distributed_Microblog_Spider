@@ -31,6 +31,7 @@ import math
 # import from this folder
 import client_config as config
 import File_Interface as FI
+from data_transport import upload_list
 #=======================================================================
 
 #=======================================================================
@@ -813,142 +814,66 @@ class getHistory(threading.Thread):
                 timestamp_list.append(temp)
             except:
                 pass
+
+
         latest_timestamp=max(timestamp_list)
         time_temp=time.localtime(latest_timestamp)
         latest_time=time.strftime('%Y-%m-%d %H:%M:%S',time_temp)
 
-        ret_batchsize=500000
-        # todo  have to delete!!!!------------------------------------
-        content_unique=content_unique[0:min(content_unique.__len__()-1,10)]
-        from pymongo import MongoClient
-        client=MongoClient('localhost',27017)
-        db=client['microblog_spider']
-        collection=db.test3
-        result=collection.insert_many(content_unique)
-        #------------------------------------------------------------------------
-        if content_unique.__len__()<ret_batchsize:   # 如果行数大于5000，则需要进行分块传输
-            userHistory={           # return the user's history to server
-                'user_history':content_unique,
-                'latest_timestamp':latest_timestamp,
-                'latest_time':latest_time,
-                'container_id':self.container_id,
-                'isDivided':0   # 0 表示未分块, 1 表示有分块
-            }
-            try:
-                data=parse.urlencode(userHistory).encode('utf8')
-            except:
-                err_str='error:getHistory->run: ' \
-                        'unable to parse uesr history data'
-                info_manager(err_str,type='KEY')
-                raise TypeError('Unable to parse user history')
+        # transport the data to data server
+        start_time=int(time.time())
+        url='{url}/history_data'.format(url=config.DATA_SERVER_URL)
+        upload=upload_history(content_unique,url,15,10,self.container_id)
+        upload.run()
+        end_time=int(time.time())
+        time_gap=end_time-start_time
+        success_str='Success:upload data of {cid} to data server,use {gap} secs' \
+            .format(cid=self.container_id,gap=time_gap)
+        info_manager(success_str,type='KEY')
 
-            url='{url}/history_return'.format(url=config.SERVER_URL)
-            req=request.Request(url,data)
-            opener=request.build_opener()
+        userHistory={
+            'latest_timestamp':latest_timestamp,
+            'latest_time':latest_time,
+            'container_id':self.container_id,
+        }
 
-            try:
-                res=opener.open(req)
-            except:
-                times=0
+        try:
+            data=parse.urlencode(userHistory).encode('utf8')
+        except:
+            err_str='error:getHistory->run: ' \
+                    'unable to parse uesr history data'
+            info_manager(err_str,type='KEY')
+            raise TypeError('Unable to parse user history')
 
-                while times<5:
-                    times+=1
-                    time.sleep(3)
-                    try:
-                        res=opener.open(req)
-                        break
-                    except:
-                        warn_str='warn:getHistory->run:' \
-                                 'unable to return history to server ' \
-                                 'try {num} times'.format(num=times)
-                        info_manager(warn_str,type='NORMAL')
-                if times==5:
-                    FI.save_pickle(contents,'data.pkl')
-                    string='warn: getHistory->run: ' \
-                           'get user history , but unable to connect server,' \
-                           'stored in data.pkl'
-                    info_manager(string,type='KEY')
+        url='{url}/history_report'.format(url=config.SERVER_URL)
+        req=request.Request(url,data)
+        opener=request.build_opener()
 
-            res=res.read().decode('utf8')
-            if 'success to return user history'in res:
-                suc_str='Success:getHistory->run:' \
-                        'Success to return user history to server'
-                info_manager(suc_str,type='KEY')
-            else:
-                FI.save_pickle(contents,'data.pkl')
-                string='warn: getHistory->run: ' \
-                       'get user history, but unable to connect server,' \
-                       'stored in data.pkl'
-                info_manager(string,type='KEY')
-        else:
+        try:
+            res=opener.open(req)
+        except:
+            times=0
 
-            ret_block=math.ceil(content_unique/ret_batchsize)
-            task_list=[x for x in range(ret_block)]
-            while task_list:
-            # for block_num in range(ret_block):
-                block_num=task_list.pop(0)
-                userHistory={
-                    'user_history':content_unique[
-                                   block_num*ret_batchsize:
-                                   min((block_num+1)*ret_batchsize-1,content_unique.__len__()-1)
-                    ],
-                    'latest_timestamp':latest_timestamp,
-                    'latest_time':latest_time,
-                    'container_id':self.container_id,
-                    'isDivided':1,   # 0 表示未分块, 1 表示有分块
-                    'block_num':ret_block,
-                    'current_block':block_num
-                }
-
-                try:
-                    data=parse.urlencode(userHistory).encode('utf8')
-                except:
-                    err_str='error:getHistory->run: ' \
-                            'unable to parse uesr history data'
-                    info_manager(err_str,type='KEY')
-                    raise TypeError('Unable to parse user history')
-
-                url='{url}/history_return'.format(url=config.SERVER_URL)
-                req=request.Request(url,data)
-                opener=request.build_opener()
-
+            while times<5:
+                times+=1
+                time.sleep(3)
                 try:
                     res=opener.open(req)
+                    break
                 except:
-                    times=0
+                    warn_str='warn:getHistory->run:' \
+                             'unable to return history to server ' \
+                             'try {num} times'.format(num=times)
+                    info_manager(warn_str,type='NORMAL')
 
-                    while times<5:
-                        times+=1
-                        time.sleep(3)
-                        try:
-                            res=opener.open(req)
-                            break
-                        except:
-                            warn_str='warn:getHistory->run:' \
-                                     'unable to return history to server ' \
-                                     'try {num} times'.format(num=times)
-                            info_manager(warn_str,type='NORMAL')
-                    if times==5:
-                        task_list.append(block_num)
-                        string='warn: getHistory->run: ' \
-                               'get user history , but unable to connect server,' \
-                               'this block is put in the end of task list'
-                        info_manager(string,type='KEY')
-
-                res=res.read().decode('utf8')
-
-                if 'success to return user history'in res:
-                    suc_str='Success:getHistory->run:' \
-                            'Success to return part {num} of history to server'\
-                        .format(num=block_num)
-                    info_manager(suc_str,type='KEY')
-                else:
-                    string='warn: getHistory->run: ' \
-                           'get user history, but unable to connect server,' \
-                           'stored in data.pkl'
-                    info_manager(string,type='KEY')
-            string='Success:getHistory->run:' \
-                   'Success to return ALL history to server'
+        res=res.read().decode('utf8')
+        if 'success'in res:
+            suc_str='Success:getHistory->run:' \
+                    'Success to return user history to server'
+            info_manager(suc_str,type='KEY')
+        else:
+            string='warn: getHistory->run: ' \
+                   'get user history, but report was denied by server'
             info_manager(string,type='KEY')
 
         self.return_proxy()
@@ -1366,6 +1291,30 @@ class parseMicroblogPage():
                     .format(topic=block['topic_title'])
             msg.append(temp)
         return msg
+
+class upload_history(upload_list):
+    # todo 可以加一个进度表的功能
+    def __init__(self,data,url,pack_len,thread_num,container_id):
+        self.container_id=container_id
+        setting=dict(
+            batch_size=pack_len,
+            thread_adjust=False,
+            thread_num=thread_num
+        )
+        upload_list.__init__(self,data,url,setting)
+
+    def pack_block(self,main_data,pack_id,pack_num):
+        data={
+            'data':          main_data,
+            'current_id':   pack_id,
+            'total_num':    pack_num,
+            'len':           main_data.__len__(),
+            'container_id':self.container_id
+        }
+        data=parse.urlencode(data).encode('utf8')
+        return data
+
+
 
 def random_str(randomlength=8):
     str = ''

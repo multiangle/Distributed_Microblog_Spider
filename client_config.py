@@ -25,8 +25,9 @@ CURRENT_YEAR            =2016
 ####-------------------------------------####
 
 SERVER_URL='http://multiangle.imwork.net:13104' #服务器地址,端口号
-# SERVER_URL='http://121.42.163.195:8000'
-# SERVER_URL='http://127.0.0.1:8000' #服务器地址,端口号
+DATA_SERVER_URL='http://multiangle.imwork.net:12790'    #数据服务器地址，端口号
 
+# SERVER_URL='http://127.0.0.1:8000' #服务器地址,端口号
+# DATA_SERVER_URL='http://127.0.0.1:8001'    #数据服务器地址，端口号
 
 
