@@ -961,10 +961,6 @@ class getHistory(threading.Thread):
                 try:
                     pmp=parseMicroblogPage()
                     res=pmp.parse_blog_page(page)
-                    # TODO DELETE for test--------
-                    # for i in res:
-                    #     print(json.dumps(i,indent=4))
-                    #---------------------------------
                     self.contents[:]=self.contents[:]+res
                     info_str='Success: Page {url} is done'.format(url=url)
                     info_manager(info_str,type='NORMAL')
@@ -1103,8 +1099,6 @@ class parseMicroblogPage():
 
 
         return msg
-        # return data
-        #todo  需要处理的内容：text,retweeted,topic_struct,url_struct,page_info
 
     def parse_user_info(self,user_data):
         keys=user_data.keys()
@@ -1293,7 +1287,6 @@ class parseMicroblogPage():
         return msg
 
 class upload_history(upload_list):
-    # todo 可以加一个进度表的功能
     def __init__(self,data,url,pack_len,thread_num,container_id):
         self.container_id=container_id
         setting=dict(

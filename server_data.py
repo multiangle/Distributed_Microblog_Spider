@@ -1,10 +1,16 @@
 __author__ = 'multiangle'
 
+#======================================================================
+#----------------import package--------------------------
+# import python package
 import tornado.web
 import tornado.ioloop
 import tornado.options
 from tornado.options import define,options
+from pymongo import MongoClient
 
+# import from this folder
+#======================================================================
 class Application(tornado.web.Application):
     def __init__(self):
         handlers=[
@@ -25,8 +31,23 @@ class HistoryDataReturn(tornado.web.RequestHandler):
             container_id=self.get_argument('container_id')
             self.write('success')
             self.finish()
-            print('Success: to get data from web')
-            #todo 将收到的子包放入装配车间
+
+            client=MongoClient('localhost',27017)
+            db=client['microblog_spider']
+            collection=db.assemble_factory
+
+            # store sub pack to assemble factory
+            mongo_data=dict(
+                data        =data,
+                current_id  =current_id,
+                total_num   =total_num,
+                len         =len,
+                container_id=container_id,
+                type        ='history'
+            )
+            result=collection.insert_many(mongo_data)
+            print('ServerData->HistoryDataReturn: Success to get data from web')
+
         except Exception as e:
             self.write('fail to return user history')
             self.finish()

@@ -25,6 +25,7 @@ class upload_list():
         self.seting_check()
 
         self.task_list=[]
+        self.task_num=0
         self.build_task_list()
 
     def run(self):
@@ -46,6 +47,14 @@ class upload_list():
                         t=upload_sub(self.task_list,self.url,i,stat_ret,alive_id)
                         thread_pool[i]=t
                         thread_pool[i].start()
+
+                task_left_num=self.task_list.__len__()
+                task_done_num=max(self.task_num-task_left_num,0)
+                show_block=40
+                task_left_show=min(max(int(show_block*task_left_num/(task_left_num+task_done_num)),0),show_block)
+                task_done_show=show_block-task_left_show
+                print(task_done_show*'★'+task_left_show*'☆')
+
                 time.sleep(1)
 
             while True:
@@ -111,6 +120,7 @@ class upload_list():
         for i in range(batch_num):
             ori_block=self.data_list[i*self.batch_size:min((i+1)*self.batch_size,self.list_len)]
             self.task_list.append(self.pack_block(ori_block,i,batch_num))
+        self.task_num=self.task_list.__len__()
         self.data_list=None     # 注释掉data_list,留下 task_list formation:[{}{}{}]
 
     def pack_block(self,main_data,pack_id,pack_num):
