@@ -88,7 +88,7 @@ class upload_list():
                 show_block=40
                 task_left_show=min(max(int(show_block*task_left_num/(task_left_num+task_done_num)),0),show_block)
                 task_done_show=show_block-task_left_show
-                print(task_done_show*'★'+task_left_show*'☆')
+                print(task_done_show*'◆'+task_left_show*'―')
 
                 time.sleep(1)
 

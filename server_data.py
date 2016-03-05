@@ -25,10 +25,10 @@ class DataServer(tornado.web.Application):
 class HistoryDataReturn(tornado.web.RequestHandler):
     def post(self):
         try:
-            data=self.get_argument('data')
-            current_id=self.get_argument('current_id')
-            total_num=self.get_argument('total_num')
-            len=self.get_argument('len')
+            data=eval(self.get_argument('data'))
+            current_id=int(self.get_argument('current_id'))
+            total_num=int(self.get_argument('total_num'))
+            len=int(self.get_argument('len'))
             container_id=self.get_argument('container_id')
             self.write('success')
             self.finish()
@@ -47,7 +47,7 @@ class HistoryDataReturn(tornado.web.RequestHandler):
                 type        ='history'
             )
             result=collection.insert(mongo_data)
-            print('ServerData->HistoryDataReturn: Success to get data from web')
+            # print('ServerData->HistoryDataReturn: Success to get data from web')
 
         except Exception as e:
             self.write('fail to return user history')

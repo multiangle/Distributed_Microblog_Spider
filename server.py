@@ -25,13 +25,14 @@ __author__ = 'multiangle'
 # import python package
 import threading
 import time
-from pymongo import MongoClient
+import sys
 
 # import from outer package
 import tornado.web
 import tornado.ioloop
 import tornado.options
 from tornado.options import define,options
+from pymongo import MongoClient
 
 # import from this folder
 from server_proxy import proxy_pool,proxy_manager
@@ -298,8 +299,7 @@ class HistoryReport(tornado.web.RequestHandler):
         assemble_table=db.assemble_factory
         res=assemble_table.find({'container_id':container_id},{'current_id':1,'total_num':1}).sort('current_id')
         id_list=[x['current_id'] for x in res]
-        num=res[0]['total_num']
-
+        num=int([x['total_num'] for x in assemble_table.find({'container_id':container_id}).limit(1)][0])
         #检查是否所有包裹已经到齐
         check_state=True
         if id_list.__len__()<num:
@@ -327,12 +327,21 @@ class HistoryReport(tornado.web.RequestHandler):
             try:
                 data_list=assemble_table.find({'container_id':container_id},{'data':1}).sort('current_id')
                 data_list=[x['data'] for x in data_list]
-                data_final=[]
-                for i in data_list:
-                    data_final=data_final+i
+                print(data_list)
             except Exception as e:
                 print('Error:server-HistoryReturn:'
                       'Unable to get data from MongoDB, assemble factory,Reason:')
+                print(e)
+
+            # 将碎片拼接
+            try:
+                data_final=[]
+                for i in data_list:
+                    data_final=data_final+i
+                    print(i)
+            except Exception as e:
+                print('Error:server-HistoryReport:'
+                      'Unable to contact the pieces of information，Reason:')
                 print(e)
 
             # 将本次信息录入accuracy_table 用以进一步分析
@@ -349,9 +358,12 @@ class HistoryReport(tornado.web.RequestHandler):
                 if not user_info[col_name.index('update_time')]:
                     # 将数据存入 Mongodb 的formal collection
                     save_data_inMongo(data_final)
+                    print('Success: Data has saved in Mongodb, size is {size}'
+                          .format(size=sys.getsizeof(data_final)))
 
                     # 将数据从assemble factory 去掉
                     assemble_table.remove({'container_id':container_id})
+                    print('Success: Data has been removed from assemble factory')
 
                     # # 将关键信息录入Mydql
                     # query='update user_info_table set ' \
@@ -373,8 +385,10 @@ class HistoryReport(tornado.web.RequestHandler):
                     query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
                         .format(cid=container_id)
                     dbi.update_asQuery(query)
-            except:
-                pass
+            except Exception as e:
+                print('Error:server->HistoryReport:'
+                      'Reason:')
+                print(e)
         else:
             # 如果所有子包不全，则抹掉isGettingBlog,将装配车间中数据删除
             query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
