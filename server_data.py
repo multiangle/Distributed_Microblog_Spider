@@ -11,10 +11,11 @@ from pymongo import MongoClient
 
 # import from this folder
 #======================================================================
-class Application(tornado.web.Application):
+class DataServer(tornado.web.Application):
     def __init__(self):
         handlers=[
-            (r'/history_data',HistoryDataReturn)
+            (r'/history_data',HistoryDataReturn),
+            (r'/auth',DataAuth)
         ]
         setting=dict(
             debug=True
@@ -56,6 +57,11 @@ class HistoryDataReturn(tornado.web.RequestHandler):
             print(e)
             return
 
+class DataAuth(tornado.web.RequestHandler):
+    def get(self):
+        self.write('connection success')
+        self.finish()
+
 if __name__=='__main__':
-    Application().listen(8001)
+    DataServer().listen(8001)
     tornado.ioloop.IOLoop.instance().start()

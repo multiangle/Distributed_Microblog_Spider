@@ -39,7 +39,7 @@ import server_config as config
 from server_database import DB_manager,deal_cache_user_info,deal_cache_attends
 import File_Interface as FI
 from DB_Interface import MySQL_Interface
-
+from server_data import DataServer
 #=======================================================================
 define('port',default=8000,help='run on the given port',type=int)
 
@@ -400,4 +400,5 @@ if __name__=='__main__':
 
     tornado.options.parse_command_line()    # tornado thread
     Application().listen(options.port)
+    DataServer().listen(8001)
     tornado.ioloop.IOLoop.instance().start()
