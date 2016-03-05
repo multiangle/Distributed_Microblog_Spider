@@ -46,7 +46,7 @@ class HistoryDataReturn(tornado.web.RequestHandler):
                 container_id=container_id,
                 type        ='history'
             )
-            result=collection.insert_many(mongo_data)
+            result=collection.insert(mongo_data)
             print('ServerData->HistoryDataReturn: Success to get data from web')
 
         except Exception as e:

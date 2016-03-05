@@ -82,6 +82,14 @@ class upload_list():
                         t=upload_sub(self.task_list,self.url,i,stat_ret,alive_id)
                         thread_pool[i]=t
                         thread_pool[i].start()
+
+                task_left_num=self.task_list.__len__()
+                task_done_num=max(self.task_num-task_left_num,0)
+                show_block=40
+                task_left_show=min(max(int(show_block*task_left_num/(task_left_num+task_done_num)),0),show_block)
+                task_done_show=show_block-task_left_show
+                print(task_done_show*'★'+task_left_show*'☆')
+
                 time.sleep(1)
 
             while True:
