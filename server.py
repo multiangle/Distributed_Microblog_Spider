@@ -325,9 +325,8 @@ class HistoryReport(tornado.web.RequestHandler):
 
             # 将数据从assemble factory中提取出来
             try:
-                data_list=assemble_table.find({'container_id':container_id},{'data':1}).sort('current_id')
+                data_list=assemble_table.find({'container_id':container_id},{'data':1})
                 data_list=[x['data'] for x in data_list]
-                print(data_list)
             except Exception as e:
                 print('Error:server-HistoryReturn:'
                       'Unable to get data from MongoDB, assemble factory,Reason:')
@@ -338,7 +337,6 @@ class HistoryReport(tornado.web.RequestHandler):
                 data_final=[]
                 for i in data_list:
                     data_final=data_final+i
-                    print(i)
             except Exception as e:
                 print('Error:server-HistoryReport:'
                       'Unable to contact the pieces of information，Reason:')
