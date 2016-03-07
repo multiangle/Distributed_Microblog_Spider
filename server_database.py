@@ -192,11 +192,24 @@ class deal_isGettingBLog_user(threading.Thread):
             self.dbi=MySQL_Interface()
             t=time.time()
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t-24*60*60))
-            select_query='select container_id from user_info_table where isGettingBlog<\'{time}\''.format(time=time_stick)
-            res=self.dbi.select_asQuery(select_query)
-            # todo 需要从mongodb中把过时的数据删除,还需要把cache_history中的处理掉
-            query="update user_info_table set isGettingBlog=null where isGettingBlog<\'{time}\'".format(time=time_stick)
+
+            #删掉cache_history中的行
+            query='delete from cache_history where container_id in (select container_id from user_info_table where isGettingBlog<\'{time}\' and update_time is null)'\
+                .format(time=time_stick)
             self.dbi.update_asQuery(query)
+
+            # 删掉mongodb-assemble factory中的相关值
+            select_query='select container_id from user_info_table where isGettingBlog<\'{time}\' and update_time is null'.format(time=time_stick)
+            res=[x[0] for x in self.dbi.select_asQuery(select_query)]
+            client=MongoClient('localhost',27017)
+            db=client['microblog_spider']
+            assemble_table=db.assemble_factory
+            assemble_table.remove({'container_id':{'$in':res}})
+
+            # 将user info table中超时行的isGettingBlog清空
+            query="update user_info_table set isGettingBlog=null where isGettingBlog<\'{time}\' and update_time is null".format(time=time_stick)
+            self.dbi.update_asQuery(query)
+
             time.sleep(60)
 
 class deal_cache_history(threading.Thread):
@@ -292,17 +305,17 @@ class deal_cache_history(threading.Thread):
                         print('Success: Data has been removed from assemble factory')
 
                         # # 将关键信息录入Mydql
-                        # query='update user_info_table set ' \
-                        #       'update_time=\'{up_time}\',' \
-                        #       'latest_blog=\'{latest_blog}\',' \
-                        #       'isGettingBlog=null ' \
-                        #       'where container_id=\'{cid}\';'\
-                        #     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
                         query='update user_info_table set ' \
                               'update_time=\'{up_time}\',' \
-                              'latest_blog=\'{latest_blog}\'' \
-                              'where container_id=\'{cid}\';' \
+                              'latest_blog=\'{latest_blog}\',' \
+                              'isGettingBlog=null ' \
+                              'where container_id=\'{cid}\';'\
                             .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
+                        # query='update user_info_table set ' \
+                        #       'update_time=\'{up_time}\',' \
+                        #       'latest_blog=\'{latest_blog}\'' \
+                        #       'where container_id=\'{cid}\';' \
+                        #     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
                         #TODO 这里为了方便统计，去掉了抹除isGetting这一项，但是正式运行的时候是要加上的
                         dbi.update_asQuery(query)
                         print('Success: insert user into MongoDB, the num of data is {len}'

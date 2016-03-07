@@ -32,7 +32,6 @@ import tornado.web
 import tornado.ioloop
 import tornado.options
 from tornado.options import define,options
-from pymongo import MongoClient
 
 # import from this folder
 from server_proxy import proxy_pool,proxy_manager
@@ -426,12 +425,6 @@ class HistoryReport(tornado.web.RequestHandler):
         #         .format(cid=container_id)
         #     dbi.update_asQuery(query)
         #     assemble_table.remove({'container_id':container_id})
-
-def save_data_inMongo(dict_data):
-    client=MongoClient('localhost',27017)
-    db=client['microblog_spider']
-    collection=db.formal
-    result=collection.insert_many(dict_data)
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()         # proxy thread
