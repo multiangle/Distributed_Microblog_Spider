@@ -223,7 +223,7 @@ class deal_cache_history(threading.Thread):
             query='select * from cache_history where is_dealing is null order by checkin_timestamp limit 1'
 
             mysql_res=dbi.select_asQuery(query)
-            if res.__len__()==0:       # cache_history表为空时，睡眠1秒,跳过此次循环
+            if mysql_res.__len__()==0:       # cache_history表为空时，睡眠1秒,跳过此次循环
                 time.sleep(1)
                 continue
 
