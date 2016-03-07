@@ -118,11 +118,12 @@ class TaskHandler(tornado.web.RequestHandler):
                 .format(t_time=time_stick,uid=uid)
             dbi.update_asQuery(query)
 
+
         if task_id==2:      # get the history microblog of a certain user
             dbi=MySQL_Interface()
             query='select container_id,blog_num from user_info_table ' \
-                  'where (isGettingBlog is null and update_time is null) ' \
-                  'order by fans_num desc limit 1 ;'
+                  'where (isGettingBlog is null and update_time is null and blog_num<{valve}) ' \
+                  'order by fans_num desc limit 1 ;'.format(valve=config.HISTORY_TASK_VALVE)
             # query='select container_id,blog_num from user_info_table ' \
             #       'order by rand() limit 1 ;'
             [container_id,blog_num]=dbi.select_asQuery(query)[0]
@@ -134,7 +135,23 @@ class TaskHandler(tornado.web.RequestHandler):
                 .format(t_time=time_stick,cid=container_id)
             dbi.update_asQuery(query)
 
-        if task_id==3:   # this part is in test
+        if task_id==3:      # get the history microblog of a certain user
+            dbi=MySQL_Interface()
+            query='select container_id,blog_num from user_info_table ' \
+                  'where (isGettingBlog is null and update_time is null and blog_num>={valve}) ' \
+                  'order by fans_num desc limit 1 ;'.format(valve=config.HISTORY_TASK_VALVE)
+            # query='select container_id,blog_num from user_info_table ' \
+            #       'order by rand() limit 1 ;'
+            [container_id,blog_num]=dbi.select_asQuery(query)[0]
+            self.write('{c_id};{blog},history'
+                       .format(c_id=container_id,blog=blog_num))
+            self.finish()
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            query="update user_info_table set isGettingBlog=\'{t_time}\' where container_id={cid} ;" \
+                .format(t_time=time_stick,cid=container_id)
+            dbi.update_asQuery(query)
+
+        if task_id==4:   # this part is in test
             dbi=MySQL_Interface()
             current_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
             target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24)) #提早一天
@@ -157,14 +174,17 @@ class TaskHandler(tornado.web.RequestHandler):
 
     def task_assign(self,uuid):
         t_1=['1']         # get social web
-        t_2=['2']         # get history weibo
-        t_3=[]          # update the weibo info
+        t_2=['2']         # get history weibo , get counter which blog_num<=15000 ,connect with server through www
+        t_3=['3']         # get history weibo , get counter which blog_num>15000 ,connect with server through localhost
+        t_4=['4']         # update weibo
         if uuid in t_1:
             return 1
         elif uuid in t_2:
             return 2
         elif uuid in t_3:
             return 3
+        elif uuid in t_4:
+            return 4
         else:
             return -1
 
@@ -294,105 +314,118 @@ class HistoryReport(tornado.web.RequestHandler):
             print(e)
             return
 
-        client=MongoClient('localhost',27017)
-        db=client['microblog_spider']
-        assemble_table=db.assemble_factory
-        res=assemble_table.find({'container_id':container_id},{'current_id':1,'total_num':1}).sort('current_id')
-        id_list=[x['current_id'] for x in res]
-        num=int([x['total_num'] for x in assemble_table.find({'container_id':container_id}).limit(1)][0])
-        #检查是否所有包裹已经到齐
-        check_state=True
-        if id_list.__len__()<num:
-            print('server->HistoryReport:The package is not complete, retry to catch data')
-            check_state=False
-
         dbi=MySQL_Interface()
-        if check_state:
-            # 如果所有子包已经收集完毕，则将数据放入正式数据库mongodb
-            # 将装配车间中的相关数据删除
-            # 并且在Mysql中更新update_time和latest_blog,抹掉isGettingBlog
+        checkin_timestamp=int(time.time())
+        col_info=dbi.get_col_name('cache_history')
+        data=dict(
+            latest_time=latest_time,
+            latest_timestamp=latest_timestamp,
+            container_id=container_id,
+            checkin_timestamp=checkin_timestamp
+        )
+        keys=data.keys()
+        insert_data=[[data[item] if item in keys else None for item in col_info]]
+        dbi.insert_asList('cache_history',insert_data)
 
-            # 从mysql获取该用户信息
-            try:
-                query='select * from user_info_table where container_id=\'{cid}\'' \
-                    .format(cid=container_id)
-                user_info=dbi.select_asQuery(query)[0]
-                col_name=dbi.get_col_name('user_info_table')
-            except Exception as e:
-                print('Error:server-HistoryReturn:'
-                      'No such user in MySQL.user_info_table,Reason:')
-                print(e)
-
-            # 将数据从assemble factory中提取出来
-            try:
-                data_list=assemble_table.find({'container_id':container_id},{'data':1})
-                data_list=[x['data'] for x in data_list]
-            except Exception as e:
-                print('Error:server-HistoryReturn:'
-                      'Unable to get data from MongoDB, assemble factory,Reason:')
-                print(e)
-
-            # 将碎片拼接
-            try:
-                data_final=[]
-                for i in data_list:
-                    data_final=data_final+i
-            except Exception as e:
-                print('Error:server-HistoryReport:'
-                      'Unable to contact the pieces of information，Reason:')
-                print(e)
-
-            # 将本次信息录入accuracy_table 用以进一步分析
-            blog_len=data_final.__len__()
-            wanted_blog_len=user_info[col_name.index('blog_num')]
-            blog_accuracy=blog_len/wanted_blog_len
-            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            query='insert into accuracy_table values ({acc},\'{t_s}\') ;' \
-                .format(acc=blog_accuracy,t_s=time_stick)
-            dbi.insert_asQuery(query)
-
-            # 将数据录入Mongodb 更改Mydql,删除assemble中相关内容
-            try:
-                if not user_info[col_name.index('update_time')]:
-                    # 将数据存入 Mongodb 的formal collection
-                    save_data_inMongo(data_final)
-                    print('Success: Data has saved in Mongodb, size is {size}'
-                          .format(size=sys.getsizeof(data_final)))
-
-                    # 将数据从assemble factory 去掉
-                    assemble_table.remove({'container_id':container_id})
-                    print('Success: Data has been removed from assemble factory')
-
-                    # # 将关键信息录入Mydql
-                    # query='update user_info_table set ' \
-                    #       'update_time=\'{up_time}\',' \
-                    #       'latest_blog=\'{latest_blog}\',' \
-                    #       'isGettingBlog=null ' \
-                    #       'where container_id=\'{cid}\';'\
-                    #     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
-                    query='update user_info_table set ' \
-                          'update_time=\'{up_time}\',' \
-                          'latest_blog=\'{latest_blog}\'' \
-                          'where container_id=\'{cid}\';' \
-                        .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
-                    #TODO 这里为了方便统计，去掉了抹除isGetting这一项，但是正式运行的时候是要加上的
-                    dbi.update_asQuery(query)
-                    print('Success: insert user into MongoDB, the num of data is {len}'
-                          .format(len=blog_len))
-                else:
-                    query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
-                        .format(cid=container_id)
-                    dbi.update_asQuery(query)
-            except Exception as e:
-                print('Error:server->HistoryReport:'
-                      'Reason:')
-                print(e)
-        else:
-            # 如果所有子包不全，则抹掉isGettingBlog,将装配车间中数据删除
-            query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
-                .format(cid=container_id)
-            dbi.update_asQuery(query)
-            assemble_table.remove({'container_id':container_id})
+        # client=MongoClient('localhost',27017)
+        # db=client['microblog_spider']
+        # assemble_table=db.assemble_factory
+        # res=assemble_table.find({'container_id':container_id},{'current_id':1,'total_num':1}).sort('current_id')
+        # id_list=[x['current_id'] for x in res]
+        # num=int([x['total_num'] for x in assemble_table.find({'container_id':container_id}).limit(1)][0])
+        # #检查是否所有包裹已经到齐
+        # check_state=True
+        # if id_list.__len__()<num:
+        #     print('server->HistoryReport:The package is not complete, retry to catch data')
+        #     check_state=False
+        #
+        # dbi=MySQL_Interface()
+        # if check_state:
+        #     # 如果所有子包已经收集完毕，则将数据放入正式数据库mongodb
+        #     # 将装配车间中的相关数据删除
+        #     # 并且在Mysql中更新update_time和latest_blog,抹掉isGettingBlog
+        #
+        #     # 从mysql获取该用户信息
+        #     try:
+        #         query='select * from user_info_table where container_id=\'{cid}\'' \
+        #             .format(cid=container_id)
+        #         user_info=dbi.select_asQuery(query)[0]
+        #         col_name=dbi.get_col_name('user_info_table')
+        #     except Exception as e:
+        #         print('Error:server-HistoryReturn:'
+        #               'No such user in MySQL.user_info_table,Reason:')
+        #         print(e)
+        #
+        #     # 将数据从assemble factory中提取出来
+        #     try:
+        #         data_list=assemble_table.find({'container_id':container_id},{'data':1})
+        #         data_list=[x['data'] for x in data_list]
+        #     except Exception as e:
+        #         print('Error:server-HistoryReturn:'
+        #               'Unable to get data from MongoDB, assemble factory,Reason:')
+        #         print(e)
+        #
+        #     # 将碎片拼接
+        #     try:
+        #         data_final=[]
+        #         for i in data_list:
+        #             data_final=data_final+i
+        #     except Exception as e:
+        #         print('Error:server-HistoryReport:'
+        #               'Unable to contact the pieces of information，Reason:')
+        #         print(e)
+        #
+        #     # 将本次信息录入accuracy_table 用以进一步分析
+        #     blog_len=data_final.__len__()
+        #     wanted_blog_len=user_info[col_name.index('blog_num')]
+        #     blog_accuracy=blog_len/wanted_blog_len
+        #     time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+        #     query='insert into accuracy_table values ({acc},\'{t_s}\') ;' \
+        #         .format(acc=blog_accuracy,t_s=time_stick)
+        #     dbi.insert_asQuery(query)
+        #
+        #     # 将数据录入Mongodb 更改Mydql,删除assemble中相关内容
+        #     try:
+        #         if not user_info[col_name.index('update_time')]:
+        #             # 将数据存入 Mongodb 的formal collection
+        #             save_data_inMongo(data_final)
+        #             print('Success: Data has saved in Mongodb, size is {size}'
+        #                   .format(size=sys.getsizeof(data_final)))
+        #
+        #             # 将数据从assemble factory 去掉
+        #             assemble_table.remove({'container_id':container_id})
+        #             print('Success: Data has been removed from assemble factory')
+        #
+        #             # # 将关键信息录入Mydql
+        #             # query='update user_info_table set ' \
+        #             #       'update_time=\'{up_time}\',' \
+        #             #       'latest_blog=\'{latest_blog}\',' \
+        #             #       'isGettingBlog=null ' \
+        #             #       'where container_id=\'{cid}\';'\
+        #             #     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
+        #             query='update user_info_table set ' \
+        #                   'update_time=\'{up_time}\',' \
+        #                   'latest_blog=\'{latest_blog}\'' \
+        #                   'where container_id=\'{cid}\';' \
+        #                 .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
+        #             #TODO 这里为了方便统计，去掉了抹除isGetting这一项，但是正式运行的时候是要加上的
+        #             dbi.update_asQuery(query)
+        #             print('Success: insert user into MongoDB, the num of data is {len}'
+        #                   .format(len=blog_len))
+        #         else:
+        #             query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
+        #                 .format(cid=container_id)
+        #             dbi.update_asQuery(query)
+        #     except Exception as e:
+        #         print('Error:server->HistoryReport:'
+        #               'Reason:')
+        #         print(e)
+        # else:
+        #     # 如果所有子包不全，则抹掉isGettingBlog,将装配车间中数据删除
+        #     query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
+        #         .format(cid=container_id)
+        #     dbi.update_asQuery(query)
+        #     assemble_table.remove({'container_id':container_id})
 
 def save_data_inMongo(dict_data):
     client=MongoClient('localhost',27017)

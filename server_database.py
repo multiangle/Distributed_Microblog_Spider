@@ -21,7 +21,6 @@ __author__ = 'multiangle'
         _0.2:   add redis and bloom filter as the cache of mysql
         _0.1_:  The 1st edition
 """
-# TODO 第三个功能还未实现 。
 #======================================================================
 #----------------import package--------------------------
 # import python package
@@ -36,6 +35,8 @@ import json
 import http.cookiejar
 import re
 import random
+import sys
+from pymongo import MongoClient
 
 # import from this folder
 import client_config as config
@@ -181,6 +182,152 @@ class control_ready_table(threading.Thread):
             else:
                 time.sleep(600)
 
+class deal_isGettingBLog_user(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.dbi=MySQL_Interface()
+
+    def run(self):
+        while True:
+            self.dbi=MySQL_Interface()
+            t=time.time()
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t-24*60*60))
+            select_query='select container_id from user_info_table where isGettingBlog<\'{time}\''.format(time=time_stick)
+            res=self.dbi.select_asQuery(select_query)
+            # todo 需要从mongodb中把过时的数据删除,还需要把cache_history中的处理掉
+            query="update user_info_table set isGettingBlog=null where isGettingBlog<\'{time}\'".format(time=time_stick)
+            self.dbi.update_asQuery(query)
+            time.sleep(60)
+
+class deal_cache_history(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        while True:
+            dbi=MySQL_Interface()
+            col_info=dbi.get_col_name('cache_history')
+            query='select * from cache_history where is_dealing is null order by checkin_timestamp limit 1'
+
+            mysql_res=dbi.select_asQuery(query)
+            if res.__len__()==0:       # cache_history表为空时，睡眠1秒,跳过此次循环
+                time.sleep(1)
+                continue
+
+            mysql_res=mysql_res[0]
+            container_id=mysql_res[col_info.index('container_id')]
+            latest_time=mysql_res[col_info.index('latest_time')]
+            latest_timestamp=mysql_res[col_info.index('latest_timestamp')]
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            query='update cache_history set is_dealing=\'{time}\''.format(time=time_stick)
+            dbi.update_asQuery(query)
+
+            client=MongoClient('localhost',27017)
+            db=client['microblog_spider']
+            assemble_table=db.assemble_factory
+            res=assemble_table.find({'container_id':container_id},{'current_id':1,'total_num':1}).sort('current_id')
+            id_list=[x['current_id'] for x in res]
+            num=int([x['total_num'] for x in assemble_table.find({'container_id':container_id}).limit(1)][0])
+
+            #检查是否所有包裹已经到齐
+            check_state=True
+            if id_list.__len__()<num:
+                print('server->HistoryReport:The package is not complete, retry to catch data')
+                check_state=False
+
+            if check_state:
+                # 如果所有子包已经收集完毕，则将数据放入正式数据库mongodb
+                # 将装配车间中的相关数据删除
+                # 并且在Mysql中更新update_time和latest_blog,抹掉isGettingBlog
+
+                # 从mysql获取该用户信息
+                try:
+                    query='select * from user_info_table where container_id=\'{cid}\'' \
+                        .format(cid=container_id)
+                    user_info=dbi.select_asQuery(query)[0]
+                    col_name=dbi.get_col_name('user_info_table')
+                except Exception as e:
+                    print('Error:server-HistoryReturn:'
+                          'No such user in MySQL.user_info_table,Reason:')
+                    print(e)
+
+                # 将数据从assemble factory中提取出来
+                try:
+                    data_list=assemble_table.find({'container_id':container_id},{'data':1})
+                    data_list=[x['data'] for x in data_list]
+                except Exception as e:
+                    print('Error:server-HistoryReturn:'
+                        'Unable to get data from MongoDB, assemble factory,Reason:')
+                    print(e)
+
+                # 将碎片拼接
+                try:
+                    data_final=[]
+                    for i in data_list:
+                        data_final=data_final+i
+                except Exception as e:
+                    print('Error:server-HistoryReport:'
+                          'Unable to contact the pieces of information，Reason:')
+                    print(e)
+
+                # 将本次信息录入accuracy_table 用以进一步分析
+                blog_len=data_final.__len__()
+                wanted_blog_len=user_info[col_name.index('blog_num')]
+                blog_accuracy=blog_len/wanted_blog_len
+                time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+                query='insert into accuracy_table values ({acc},\'{t_s}\') ;' \
+                    .format(acc=blog_accuracy,t_s=time_stick)
+                dbi.insert_asQuery(query)
+
+                # 将数据录入Mongodb 更改Mydql,删除assemble中相关内容
+                try:
+                    if not user_info[col_name.index('update_time')]:
+                        # 将数据存入 Mongodb 的formal collection
+                        save_data_inMongo(data_final)
+                        print('Success: Data has saved in Mongodb, size is {size}'
+                              .format(size=sys.getsizeof(data_final)))
+
+                        # 将数据从assemble factory 去掉
+                        assemble_table.remove({'container_id':container_id})
+                        print('Success: Data has been removed from assemble factory')
+
+                        # # 将关键信息录入Mydql
+                        # query='update user_info_table set ' \
+                        #       'update_time=\'{up_time}\',' \
+                        #       'latest_blog=\'{latest_blog}\',' \
+                        #       'isGettingBlog=null ' \
+                        #       'where container_id=\'{cid}\';'\
+                        #     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
+                        query='update user_info_table set ' \
+                              'update_time=\'{up_time}\',' \
+                              'latest_blog=\'{latest_blog}\'' \
+                              'where container_id=\'{cid}\';' \
+                            .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
+                        #TODO 这里为了方便统计，去掉了抹除isGetting这一项，但是正式运行的时候是要加上的
+                        dbi.update_asQuery(query)
+                        print('Success: insert user into MongoDB, the num of data is {len}'
+                              .format(len=blog_len))
+                    else:
+                        query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
+                            .format(cid=container_id)
+                        dbi.update_asQuery(query)
+
+                except Exception as e:
+                    print('Error:server->HistoryReport:'
+                          'Reason:')
+                    print(e)
+            else:
+                # 如果所有子包不全，则抹掉isGettingBlog,将装配车间中数据删除,去掉cache_history中相应行
+                query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
+                    .format(cid=container_id)
+                dbi.update_asQuery(query)
+                assemble_table.remove({'container_id':container_id})
+
+            # 将cache_history中的相应行删掉，表示已经处理完该事物了
+            query='delete from cache_history where container_id=\'{cid}\'' \
+                .format(cid=container_id)
+            dbi.update_asQuery(query)
+
 class DB_manager(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -191,15 +338,24 @@ class DB_manager(threading.Thread):
         self.p3=deal_fetching_user()
         self.p4=control_ready_table()
 
+        self.p5=deal_isGettingBLog_user()
+        self.p6=deal_cache_history()
+
+
     def run(self):
         self.p1.start()
         self.p2.start()
         self.p3.start()
         self.p4.start()
+        self.p5.start()
+        self.p6.start()
         print('Process: deal_cache_attends is started ')
         print('Process: deal_cache_user_info is started ')
         print('Process: deal_fetching_user is started')
         print('Process: control_ready_table is started')
+        print('Process: deal_isGettingBLog_user is started')
+        print('Process: deal_cache_history is started')
+
         while True:
             time.sleep(5)
             if not self.p1.is_alive():
@@ -218,6 +374,14 @@ class DB_manager(threading.Thread):
                 self.p4=control_ready_table()
                 self.p4.start()
                 print('Process: control_ready_table is restarted')
+            if not self.p5.is_alive():
+                self.p5=deal_isGettingBLog_user()
+                self.p5.start()
+                print('Process: deal_isGettingBlog_user is restarted')
+            if not self.p6.is_alive():
+                self.p6=deal_cache_history()
+                self.p6.start()
+                print('Process: deal_cache_history is restarted')
 
 class SimpleHash():
     def __init__(self,cap,seed):
@@ -257,6 +421,12 @@ class BloomFilter():
     def insert_asList(self,list_input,name):
         for line in list_input:
             self.insert(line,name)
+
+def save_data_inMongo(dict_data):
+    client=MongoClient('localhost',27017)
+    db=client['microblog_spider']
+    collection=db.formal
+    result=collection.insert_many(dict_data)
 
 if __name__=='__main__':
     db_thread=DB_manager()              # database thread
