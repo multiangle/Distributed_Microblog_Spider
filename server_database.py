@@ -228,20 +228,34 @@ class deal_cache_history(threading.Thread):
                 continue
 
             mysql_res=mysql_res[0]
+
+            # todo for delete-----
+            print('debug->start to deal with a new task')
+            print('debug->mysql_res: ')
+            print(mysql_res)
+            #------------------------
+
             container_id=mysql_res[col_info.index('container_id')]
+            print('debug->container_id: {cid}'.format(cid=container_id))
             latest_time=mysql_res[col_info.index('latest_time')]
             latest_timestamp=mysql_res[col_info.index('latest_timestamp')]
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            query='update cache_history set is_dealing=\'{time}\''.format(time=time_stick)
+            query='update cache_history set is_dealing=\'{time}\' where container_id={cid}'.format(time=time_stick,cid=container_id)
+            # todo for delete-----
+            print('debug->query1 : {q}'.format(q=query))
+            #------------------------
             dbi.update_asQuery(query)
 
             client=MongoClient('localhost',27017)
             db=client['microblog_spider']
             assemble_table=db.assemble_factory
-            res=assemble_table.find({'container_id':container_id},{'current_id':1,'total_num':1}).sort('current_id')
+            res=assemble_table.find({'container_id':container_id},{'current_id':1,'total_num':1})
             id_list=[x['current_id'] for x in res]
             num=int([x['total_num'] for x in assemble_table.find({'container_id':container_id}).limit(1)][0])
-
+            ## todo for delete-----
+            print('debug->id_list_len: {len}'.format(len=id_list.__len__()))
+            print('debug->num: {n}'.format(n=num))
+            #------------------------
             #检查是否所有包裹已经到齐
             check_state=True
             if id_list.__len__()<num:
@@ -258,6 +272,11 @@ class deal_cache_history(threading.Thread):
                     query='select * from user_info_table where container_id=\'{cid}\'' \
                         .format(cid=container_id)
                     user_info=dbi.select_asQuery(query)[0]
+                    # todo fro debug-------------
+                    print('debug->query2: {q}'.format(q=query))
+                    print('debug->user_info:')
+                    print(user_info)
+                    #--------------------------------
                     col_name=dbi.get_col_name('user_info_table')
                 except Exception as e:
                     print('Error:server-HistoryReturn:'
@@ -268,6 +287,9 @@ class deal_cache_history(threading.Thread):
                 try:
                     data_list=assemble_table.find({'container_id':container_id},{'data':1})
                     data_list=[x['data'] for x in data_list]
+                    # todo fro debug-------------
+                    print('debug->datalist: {len}'.format(len=data_list.__len__()))
+                    #--------------------------------
                 except Exception as e:
                     print('Error:server-HistoryReturn:'
                         'Unable to get data from MongoDB, assemble factory,Reason:')
@@ -278,6 +300,9 @@ class deal_cache_history(threading.Thread):
                     data_final=[]
                     for i in data_list:
                         data_final=data_final+i
+                    # todo fro debug-------------
+                    print('debug->数据拼接完毕,len {len}'.format(len=data_final.__len__()))
+                    #--------------------------------
                 except Exception as e:
                     print('Error:server-HistoryReport:'
                           'Unable to contact the pieces of information，Reason:')

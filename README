@@ -1,5 +1,5 @@
 =========================================================================================================
-The component and details of the project(__edition_0.6_)
+The component and details of the project(__edition_0.7_)
 ---------------------------------------------------------------------------------------------------------
 This is a Sina Weibo Spider archieved by server terminal and client terminal.
 The Server terminal mainly deal with 3 tasks.
@@ -25,6 +25,8 @@ The Server terminal mainly deal with 3 tasks.
 ==========================================================================================================
 
 UPDATE HISTORY:
+    _0.7_   :   the function of putting data to MongoDB is moved from server.py to server_database.py,
+                which improve the speed of reaction of main server
     _0.6_   :   add a data server to avoid the broken of server. And the data of weibo is translated in
                 small parts
     _0.5_   :   add the function of scratching the history of certain user
@@ -32,3 +34,21 @@ UPDATE HISTORY:
     _0.3_   :   drop the attends whoes fans num less than 1000
     _0.2_   :   add the partition to monitor the state of proxy pool
     _0.1_   :   the initial edition
+
+==========================================================================================================
+
+开机后启动流程：
+
+1.开启MySQL
+	启动 mysqld --user=mysql
+2.开启MongoDB
+	启动 mongod --dbpath I:\MongoDB\data
+3.将redis持久化关闭
+	config set save ""
+4.将user info table 写入redis
+5.开启花生壳
+6.启动服务器
+7.SSL连接云主机
+8.启动各客户端
+
+==========================================================================================================
