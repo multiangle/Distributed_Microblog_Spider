@@ -313,8 +313,8 @@ class deal_cache_history(threading.Thread):
                 wanted_blog_len=user_info[col_name.index('blog_num')]
                 blog_accuracy=blog_len/wanted_blog_len
                 time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-                query='insert into accuracy_table values ({acc},\'{t_s}\') ;' \
-                    .format(acc=blog_accuracy,t_s=time_stick)
+                query='insert into accuracy_table values ({acc},\'{t_s}\',{num}) ;' \
+                    .format(acc=blog_accuracy,t_s=time_stick,num=wanted_blog_len)
                 dbi.insert_asQuery(query)
 
                 # 将数据录入Mongodb 更改Mydql,删除assemble中相关内容
