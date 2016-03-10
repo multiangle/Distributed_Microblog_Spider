@@ -66,7 +66,8 @@ def pop_id(data):
 # for item in field:
 #     f[item]=1
 # res=collection.find(select,f).limit(10).sort('created_timestamp')
-res=read_content_in_mongo({'user_name':'头条新闻'},['dealed_text.left_content','created_at'],100,'created_timestamp','down')
+# res=read_content_in_mongo({'user_name':'陈晓'},['dealed_text.left_content','created_at','original_pic'],100,'created_timestamp','down')
 
-for line in res:
-    print(line)
+# for line in res:
+#     print(line)
+
