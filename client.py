@@ -758,7 +758,8 @@ class getHistory(threading.Thread):
                   +str(self.container_id)+\
                   '_-_WEIBO_SECOND_PROFILE_WEIBO&page={page}'
         page_num=int(int(self.blog_num)/10)
-        task_url=[model_url.format(page=(i+1)) for i in range(page_num)]
+        LARGEST_TRY_TIMES=3         # 获取页面或解析失败以后，重新尝试的次数
+        task_url=[[model_url.format(page=(i+1)),LARGEST_TRY_TIMES] for i in range(page_num)]
         random.shuffle(task_url)
         contents=[]
         threads_pool=[]
@@ -937,7 +938,7 @@ class getHistory(threading.Thread):
             while True:
                 if not self.task_url:
                     break
-                url=self.task_url.pop(0)
+                [url,LEFT_TIME]=self.task_url.pop(0)
                 # # print the process
                 # task_left=self.task_url.__len__()
                 # task_done=self.total_task_num-task_left
@@ -947,17 +948,24 @@ class getHistory(threading.Thread):
                 # print('■'*task_done_ratio+'□'*task_left_ratio)
                 # #------------------
                 time.sleep(max(random.gauss(0.5,0.1),0.05))
+                # 获取页面内容
                 try:
                     page=self.conn.getData(url,
                                            timeout=10,
                                            reconn_num=2,
                                            proxy_num=30)
                 except Exception as e:
-                    print('error:getHistory_subThread->run: '
-                          'fail to get page'+url)
-                    print('skip this page')
-                    continue
+                    # 如果获取页面失败，若LEFT_TIME>0则放入队尾,否则跳过
+                    if LEFT_TIME>0:
+                        self.task_url.append([url,LEFT_TIME-1])
+                        continue
+                    else:
+                        print('error:getHistory_subThread->run: '
+                              'fail to get page'+url)
+                        print('skip this page')
+                        continue
 
+                # 解析页面内容
                 try:
                     pmp=parseMicroblogPage()
                     res=pmp.parse_blog_page(page)
@@ -965,10 +973,38 @@ class getHistory(threading.Thread):
                     info_str='Success: Page {url} is done'.format(url=url)
                     info_manager(info_str,type='NORMAL')
                 except Exception as e:
-                    info_str='error: getHistory_subThread->run: ' \
-                            'fail to parse {url}'.format(url=url)
-                    info_manager(info_str,type='KEY')
-                    print(e)
+
+                    # 如果失败，则先将其解析为json格式
+                    try:
+                        page=json.load(page)
+                    except:
+                        if LEFT_TIME>0:
+                            self.task_url.append([url,LEFT_TIME-1])
+                            continue
+                        else:
+                            info_str='error:getHistory_subThread->run: the gotten data is not json'
+                            info_manager(info_str,type='KEY')
+                            continue
+
+                    # 如果解析出的结果为 [没有内容]
+                    if page['cards'][0]['msg']=='没有内容':
+                        if LEFT_TIME>0:
+                            self.task_url.append([url,LEFT_TIME-1])
+                            continue
+                        else:
+                            info_str='error: getHistory_subThread->run: ' \
+                                     'fail to parse {url}'.format(url=url)
+                            info_manager(info_str,type='KEY')
+                            print(e)
+                            continue
+                    else:
+                        info_str='error: getHistory_subThread->run: ' \
+                                'fail to parse {url}'.format(url=url)
+                        info_manager(info_str,type='KEY')
+                        json.dump(page,open('{cid}-{pid}.json'.format(cid=re.findall(r'containerid=\d+',url)[0],
+                                                                      pid=re.findall(r'page=\d+',url)[0]),'w'))
+                        print(e)
+                        continue
 
 class parseMicroblogPage():
     def __init__(self):

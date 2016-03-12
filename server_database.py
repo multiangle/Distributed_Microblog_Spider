@@ -321,7 +321,7 @@ class deal_cache_history(threading.Thread):
                 try:
                     if not user_info[col_name.index('update_time')]:
                         # 将数据存入 Mongodb 的formal collection
-                        save_data_inMongo(data_final)
+                        save_data_seperately(data_final)
                         print('Success: Data has saved in Mongodb, size is {size}'
                               .format(size=sys.getsizeof(data_final)))
 
@@ -465,6 +465,24 @@ def save_data_inMongo(dict_data):
     db=client['microblog_spider']
     collection=db.formal
     result=collection.insert_many(dict_data)
+
+def save_data_seperately(dict_data):
+    client=MongoClient('localhost',27017)
+    db=client['microblog_spider']
+    table_list=[]
+    data_list=[]
+    for line in dict_data:
+        temp_time=line['created_at']
+        temp_table_name='user_{year}_{month}'.format(year=temp_time[0:4],month=temp_time[5:7])
+        if temp_table_name not in table_list:
+            table_list.append(temp_table_name)
+            sub_data_list=[line]
+            data_list.append(sub_data_list)
+        else:
+            data_list[table_list.index(temp_table_name)].append(line)
+    for i in range(table_list.__len__()):
+        collection=eval('db.{name}'.format(name=table_list[i]))
+        collection.insert_many(data_list[i])
 
 if __name__=='__main__':
     db_thread=DB_manager()              # database thread
