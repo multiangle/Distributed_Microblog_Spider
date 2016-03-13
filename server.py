@@ -438,5 +438,8 @@ if __name__=='__main__':
 
     tornado.options.parse_command_line()    # tornado thread
     Application().listen(options.port)
-    DataServer().listen(8001)
+    # nginx 使用8001接口，分别链接到8002,8003,8004等若干个数据服务器
+    DataServer().listen(8002)
+    DataServer().listen(8003)
+    DataServer().listen(8004)
     tornado.ioloop.IOLoop.instance().start()
