@@ -4,10 +4,10 @@ import pymongo
 from DB_Interface import MySQL_Interface
 from pymongo import MongoClient
 
-def read_content_in_mongo(select={},field=[],limit=-1,sort='',sort_type='up'):
+def read_content_in_mongo(table_name,select={},field=[],limit=-1,sort='',sort_type='up'):
     client=MongoClient('localhost',27017)
     db=client['microblog_spider']
-    collection=db.formal
+    collection=eval('db.{name}'.format(name=table_name))
     res=None
     if limit==-1:
         if field.__len__()==0:
@@ -66,8 +66,8 @@ def pop_id(data):
 # for item in field:
 #     f[item]=1
 # res=collection.find(select,f).limit(10).sort('created_timestamp')
-# res=read_content_in_mongo({'user_name':'陈晓'},['dealed_text.left_content','created_at','original_pic'],100,'created_timestamp','down')
+res=read_content_in_mongo('user_2016_03',{'user_name':'赵忠祥'},['dealed_text.left_content','created_at','original_pic'],100,'created_timestamp','down')
 
-# for line in res:
-#     print(line)
+for line in res:
+    print(line)
 
