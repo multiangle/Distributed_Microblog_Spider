@@ -701,7 +701,7 @@ class Connector():
         try:
             self.current_proxy_oj=self.proxy_pool.pop(0)
         except Exception as e:
-            print(e)
+            # print(e)
             re_try=1
             while(re_try<retry_time):
                 time.sleep(5)
@@ -1342,8 +1342,6 @@ class upload_history(upload_list):
         }
         data=parse.urlencode(data).encode('utf8')
         return data
-
-
 
 def random_str(randomlength=8):
     str = ''
