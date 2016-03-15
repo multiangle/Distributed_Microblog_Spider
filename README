@@ -1,5 +1,5 @@
 =========================================================================================================
-The component and details of the project(__edition_0.7_)
+The component and details of the project(__edition_0.8_)
 ---------------------------------------------------------------------------------------------------------
 This is a Sina Weibo Spider archieved by server terminal and client terminal.
 The Server terminal mainly deal with 3 tasks.
@@ -25,6 +25,7 @@ The Server terminal mainly deal with 3 tasks.
 ==========================================================================================================
 
 UPDATE HISTORY:
+    _0.8_   :   start to use multi data servers and nginx
     _0.7_   :   the function of putting data to MongoDB is moved from server.py to server_database.py,
                 which improve the speed of reaction of main server
     _0.6_   :   add a data server to avoid the broken of server. And the data of weibo is translated in
@@ -37,7 +38,7 @@ UPDATE HISTORY:
 
 ==========================================================================================================
 
-开机后启动流程：
+开机流程：
 
 1.开启MySQL
 	启动 mysqld --user=mysql
@@ -46,9 +47,17 @@ UPDATE HISTORY:
 3.将redis持久化关闭
 	config set save ""
 4.将user info table 写入redis
-5.开启花生壳
-6.启动服务器
-7.SSL连接云主机
-8.启动各客户端
+5.启动nginx
+6.开启花生壳
+7.启动服务器
+8.SSL连接云主机
+9.启动客户端
 
 ==========================================================================================================
+
+爬虫重新冷启动流程：
+1.drop mongodb中的 assemble factory 和 formal两表
+2.清空mysql 中的cache_history表
+	truncate table cache_history
+3.将mysql-》user_info_table中的update_time,latest_blog和isGettingBlog设为null
+	update user_info_table set update_time=null,latest_blog=null,isGettingBlog=null

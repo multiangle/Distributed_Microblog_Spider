@@ -962,7 +962,7 @@ class getHistory(threading.Thread):
                     else:
                         print('error:getHistory_subThread->run: '
                               'fail to get page'+url)
-                        print('skip this page')
+                        print('try again')
                         continue
 
                 # 解析页面内容
@@ -1342,6 +1342,179 @@ class upload_history(upload_list):
         }
         data=parse.urlencode(data).encode('utf8')
         return data
+
+class updateHistory(threading.Thread):
+    def __init__(self,proxy_pool,task):
+        threading.Thread.__init__(self)
+        self.task=task
+        self.proxy_pool=proxy_pool
+
+    def run(self):
+        # ori_task_list是一个数组，里面每个元素格式：1005051003716184-1457818009-1446862845
+        ori_task_list=self.task.split(';')
+        self.mission_id=ori_task_list[-1]
+        ori_task_list=ori_task_list[0:-1]
+        task_list=[x.split('-') for x in ori_task_list]
+        def temp_add_item(data):
+            LARGEST_TRY_TIMES=3         # 获取页面或解析失败以后，重新尝试的次数
+            data.append(1)
+            data.append(LARGEST_TRY_TIMES)
+            return data
+        task_list=[temp_add_item(x) for x in task_list]
+        # task_list 格式：[ContainerId,UpdateTime,LatestBlog,PageId,RetryTimes]
+        random.shuffle(task_list)
+        contents=[]
+        target_user_num=task_list.__len__()
+        finished_user=[]
+        threads_pool=[]
+        for i in range(config.THREAD_NUM):  # thread initialization
+            t=self.updateHistory_subThread(task_list,self.proxy_pool,contents,finished_user)
+            threads_pool.append(t)
+        for t in threads_pool:
+            t.start()
+
+        proceed_count=0
+        while True:
+            time.sleep(0.2)
+            #------------------------------------
+            # proceed counter ,report the proceed
+            proceed_count+=1
+            if proceed_count>5:
+                task_done=max(finished_user.__len__(),0)
+                task_left=max(target_user_num-task_done,0)
+                block_num=40
+                task_done_ratio=min(max(0,int(task_done*block_num/(task_done+task_left))),block_num)
+                task_left_ratio=block_num-task_done_ratio
+                print('■'*task_done_ratio+'□'*task_left_ratio)
+                proceed_count=0
+            #-------------------------------------
+            # 检查thread_pool中各线程是否有挂的。守护进程
+            if task_list:
+                for i in range(config.THREAD_NUM):
+                    if not threads_pool[i].is_alive():
+                        threads_pool[i]=self.updateHistory_subThread(
+                            task_list,self.proxy_pool,contents)
+                        threads_pool[i].start()
+            else:
+                all_stoped=True
+                for t in threads_pool:
+                    if t.is_alive():
+                        all_stoped=False
+                if all_stoped:
+                    break
+
+        content_unique=[]      # pick out the repeated content
+        content_msgid=[]
+        for i in range(contents.__len__()):
+            if contents[i]['idstr'] not in content_msgid:
+                content_msgid.append(contents[i]['idstr'])
+                content_unique.append(contents[i])
+            else:
+                pass
+
+        # transport the data to data server
+        start_time=int(time.time())
+        url='{url}/history_update'.format(url=config.DATA_SERVER_URL)
+        upload=upload_history(content_unique,url,15,10,self.mission_id)
+        upload.run()
+        end_time=int(time.time())
+        time_gap=end_time-start_time
+        success_str='Success:upload data of {cid} to data server,use {gap} secs' \
+            .format(cid=self.mission_id,gap=time_gap)
+        info_manager(success_str,type='KEY')
+
+        #todo 全部数据传给服务器以后，向服务器报告，请求整理和新任务
+        #todo 服务器接收到数据以后的处理工作
+        #todo 服务器发送任务后，对应的数据库处理操作
+
+    class updateHistory_subThread(threading.Thread):
+
+        def __init__(self,task_list,proxy_pool,contents,finished_user):
+            threading.Thread.__init__(self)
+            self.task_list=task_list
+            self.proxy_pool=proxy_pool
+            self.contents=contents
+            self.finished_user=finished_user
+            self.conn=Connector(proxy_pool)
+
+        def run(self):
+            while True:
+                if not self.task_list:
+                    break
+                current_task=self.task_list.pop(0)
+                container_id=current_task[0]
+                update_time =current_task[1]
+                latest_blog =current_task[2]
+                page_id     =current_task[3]
+                left_times  =current_task[4]
+                time.sleep(max(random.gauss(0.3,0.1),0.05))
+
+                url='http://m.weibo.cn/page/json?containerid={cid}_-_WEIBO_SECOND_PROFILE_WEIBO&page={page}'\
+                    .format(cid=container_id,page=page_id)
+
+                try:
+                    page=self.conn.getData(url,
+                                           timeout=10,
+                                           reconn_num=2,
+                                           proxy_num=30)
+                except Exception as e:
+                    # 如果获取页面失败，若LEFT_TIME>0则放入队尾,否则跳过
+                    if left_times>0:
+                        self.task_list.append([container_id,update_time,latest_blog,page_id,left_times-1])
+                        continue
+                    else:
+                        print('error:updataHistory_subThread->run: '
+                              'fail to get page'+url)
+                        print('try again')
+                        continue
+
+                # 解析页面内容
+                # todo 解析页面内容，如果最早的时间没有>latest_blog-7天，则要去翻第二页，以此类推
+                try:
+                    pmp=parseMicroblogPage()
+                    res=pmp.parse_blog_page(page)
+                    self.contents[:]=self.contents[:]+res
+
+                    if int(res[-1]['created_timestamp'])<int(latest_blog)-60*60*24*7:    #追踪到最后一条微博的前7天
+                        self.finished_user.append(container_id)
+                        info_str='Success: user {cid} is done'.format(cid=container_id)
+                        info_manager(info_str,type='NORMAL')
+                        continue
+                    else:
+                        LARGEST_TRY_TIMES=3
+                        self.task_list.append([container_id,update_time,latest_blog,page_id+1,LARGEST_TRY_TIMES])
+                        continue
+                except Exception as e:
+
+                    # 如果失败，则先将其解析为json格式
+                    try:
+                        page=json.load(page)
+                    except:
+                        if left_times>0:
+                            self.task_list.append([container_id,update_time,latest_blog,page_id,left_times-1])
+                            continue
+                        else:
+                            info_str='error:getHistory_subThread->run: the gotten data is not json'
+                            info_manager(info_str,type='KEY')
+                            continue
+
+                    # 如果解析出的结果为 [没有内容]
+                    if page['cards'][0]['msg']=='没有内容':
+                        if left_times>0:
+                            self.task_list.append([container_id,update_time,latest_blog,page_id,left_times-1])
+                            continue
+                        else:
+                            info_str='error: getHistory_subThread->run: ' \
+                                     'fail to parse {url}'.format(url=url)
+                            info_manager(info_str,type='KEY')
+                            print(e)
+                            continue
+                    else:
+                        info_str='error: getHistory_subThread->run: ' \
+                                 'fail to parse {url}'.format(url=url)
+                        info_manager(info_str,type='KEY')
+                        print(e)
+                        continue
 
 def random_str(randomlength=8):
     str = ''
