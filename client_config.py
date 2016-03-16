@@ -21,6 +21,7 @@ UUID                    =2                #客户端的型号 或者说id
 USE_PROXY               =True            #是否使用代理        if use proxy
 PROXY_POOL_SIZE         =THREAD_NUM*2     #每个进程维持的代理池的大小
 CURRENT_YEAR            =2016
+LARGEST_TRY_TIMES       =3                # 获取页面或解析失败以后，重新尝试的次数
 
 ####-------------------------------------####
 

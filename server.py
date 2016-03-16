@@ -53,7 +53,8 @@ class Application(tornado.web.Application):
             (r'/proxy_empty',ProxyEmpty),
             (r'/proxy_return',ProxyReturn),
             (r'/info_return',InfoReturn),
-            (r'/history_report',HistoryReport)
+            (r'/history_report',HistoryReport),
+            (r'/update_report',UpdateReport)
         ]
         settings=dict(
             debug=True
@@ -121,7 +122,7 @@ class TaskHandler(tornado.web.RequestHandler):
         if task_id==2:      # get the history microblog of a certain user
             dbi=MySQL_Interface()
             query='select container_id,blog_num from user_info_table ' \
-                  'where (isGettingBlog is null and update_time is null and blog_num<{valve}) ' \
+                  'where (isGettingBlog is null and update_time is null and blog_num<{valve} and blog_num>100)' \
                   'order by fans_num desc limit 1 ;'.format(valve=config.HISTORY_TASK_VALVE)
             # query='select container_id,blog_num from user_info_table ' \
             #       'order by rand() limit 1 ;'
@@ -137,7 +138,7 @@ class TaskHandler(tornado.web.RequestHandler):
         if task_id==3:      # get the history microblog of a certain user
             dbi=MySQL_Interface()
             query='select container_id,blog_num from user_info_table ' \
-                  'where (isGettingBlog is null and update_time is null and blog_num>={valve}) ' \
+                  'where (isGettingBlog is null and update_time is null and blog_num>={valve}  and blog_num>100)' \
                   'order by fans_num desc limit 1 ;'.format(valve=config.HISTORY_TASK_VALVE)
             # query='select container_id,blog_num from user_info_table ' \
             #       'order by rand() limit 1 ;'
@@ -325,6 +326,24 @@ class HistoryReport(tornado.web.RequestHandler):
         keys=data.keys()
         insert_data=[[data[item] if item in keys else None for item in col_info]]
         dbi.insert_asList('cache_history',insert_data)
+
+class UpdateReport(tornado.web.RequestHandler):
+    def post(self):
+        # 从客户端获取信息
+        try:
+            mission_id=self.get_argument('mission_id')
+            self.write('success')
+            self.finish()
+            print('Success: to get update report from web')
+        except Exception as e:
+            self.write('fail to return user update')
+            self.finish()
+            print('Error:server-UpdateReturn:'
+                  'Unable to get value from http package,Reason:')
+            print(e)
+            return
+
+        # todo 还没有做出接收到相应数据后的处理，不可忘记
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()         # proxy thread

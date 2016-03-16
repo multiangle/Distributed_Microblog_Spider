@@ -758,8 +758,7 @@ class getHistory(threading.Thread):
                   +str(self.container_id)+\
                   '_-_WEIBO_SECOND_PROFILE_WEIBO&page={page}'
         page_num=int(int(self.blog_num)/10)
-        LARGEST_TRY_TIMES=3         # 获取页面或解析失败以后，重新尝试的次数
-        task_url=[[model_url.format(page=(i+1)),LARGEST_TRY_TIMES] for i in range(page_num)]
+        task_url=[[model_url.format(page=(i+1)),config.LARGEST_TRY_TIMES] for i in range(page_num)]
         random.shuffle(task_url)
         contents=[]
         threads_pool=[]
@@ -1356,9 +1355,8 @@ class updateHistory(threading.Thread):
         ori_task_list=ori_task_list[0:-1]
         task_list=[x.split('-') for x in ori_task_list]
         def temp_add_item(data):
-            LARGEST_TRY_TIMES=3         # 获取页面或解析失败以后，重新尝试的次数
             data.append(1)
-            data.append(LARGEST_TRY_TIMES)
+            data.append(config.LARGEST_TRY_TIMES) # 获取页面或解析失败以后，重新尝试的次数
             return data
         task_list=[temp_add_item(x) for x in task_list]
         # task_list 格式：[ContainerId,UpdateTime,LatestBlog,PageId,RetryTimes]
@@ -1414,7 +1412,7 @@ class updateHistory(threading.Thread):
 
         # transport the data to data server
         start_time=int(time.time())
-        url='{url}/history_update'.format(url=config.DATA_SERVER_URL)
+        url='{url}/history_data'.format(url=config.DATA_SERVER_URL)
         upload=upload_history(content_unique,url,15,10,self.mission_id)
         upload.run()
         end_time=int(time.time())
@@ -1423,9 +1421,99 @@ class updateHistory(threading.Thread):
             .format(cid=self.mission_id,gap=time_gap)
         info_manager(success_str,type='KEY')
 
+        updateHistory={
+            'mission_id':self.mission_id
+        }
+
+        try:
+            data=parse.urlencode(updateHistory).encode('utf8')
+        except:
+            err_str='error:updateHistory->run: ' \
+                    'unable to parse update history data'
+            info_manager(err_str,type='KEY')
+            raise TypeError('Unable to parse update history')
+
+        url='{url}/update_report'.format(url=config.SERVER_URL)
+        req=request.Request(url,data)
+        opener=request.build_opener()
+
+        try:
+            res=opener.open(req)
+        except:
+            times=0
+            while times<5:
+                times+=1
+                time.sleep(3)
+                try:
+                    res=opener.open(req)
+                    break
+                except:
+                    warn_str='warn:updateHistory->run:' \
+                             'unable to return history to server ' \
+                             'try {num} times'.format(num=times)
+                    info_manager(warn_str,type='NORMAL')
+
+        res=res.read().decode('utf8')
+        if 'success' in res:
+            suc_str='Success:updateHistory->run:' \
+                    'Success to return user update to server'
+            info_manager(suc_str,type='KEY')
+        else:
+            string='warn: updateHistory->run: ' \
+                   'get user update, but report was denied by server'
+            info_manager(string,type='KEY')
+
+        self.return_proxy()
+        os._exit(0)
         #todo 全部数据传给服务器以后，向服务器报告，请求整理和新任务
         #todo 服务器接收到数据以后的处理工作
         #todo 服务器发送任务后，对应的数据库处理操作
+
+    def return_proxy(self):
+
+        """
+        return useful or unused proxy to server
+        """
+
+        # check_server()
+        url='{url}/proxy_return'.format(url=config.SERVER_URL)
+        proxy_ret= [x.raw_data for x in self.proxy_pool]
+        proxy_str=''
+
+        for item in proxy_ret:
+            proxy_str=proxy_str+item+';'
+        proxy_str=proxy_str[0:-1]
+        data={
+            'data':proxy_str
+        }
+
+        data=parse.urlencode(data).encode('utf-8')
+
+        try:
+            opener=request.build_opener()
+            req=request.Request(url,data)
+            res=opener.open(req).read().decode('utf-8')
+        except:
+            try:
+                opener=request.build_opener()
+                req=request.Request(url,data)
+                res=opener.open(req).read().decode('utf-8')
+            except:
+                err_str='error:client->return_proxy:unable to ' \
+                        'connect to server'
+                info_manager(err_str,type='KEY')
+                return
+
+        if 'return success' in res:
+            print('Success: return proxy to server')
+            return
+        else:
+            err_str='error:client->return_proxy:'+res
+            info_manager(err_str,type='KEY')
+            # raise ConnectionError('Unable to return proxy')
+            return
+
+
 
     class updateHistory_subThread(threading.Thread):
 
@@ -1469,7 +1557,6 @@ class updateHistory(threading.Thread):
                         continue
 
                 # 解析页面内容
-                # todo 解析页面内容，如果最早的时间没有>latest_blog-7天，则要去翻第二页，以此类推
                 try:
                     pmp=parseMicroblogPage()
                     res=pmp.parse_blog_page(page)
@@ -1481,8 +1568,7 @@ class updateHistory(threading.Thread):
                         info_manager(info_str,type='NORMAL')
                         continue
                     else:
-                        LARGEST_TRY_TIMES=3
-                        self.task_list.append([container_id,update_time,latest_blog,page_id+1,LARGEST_TRY_TIMES])
+                        self.task_list.append([container_id,update_time,latest_blog,page_id+1,config.LARGEST_TRY_TIMES])
                         continue
                 except Exception as e:
 

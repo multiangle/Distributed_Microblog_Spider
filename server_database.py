@@ -191,7 +191,7 @@ class deal_isGettingBLog_user(threading.Thread):
         while True:
             self.dbi=MySQL_Interface()
             t=time.time()
-            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t-24*60*60))
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t-12*60*60))
 
             #删掉cache_history中的行
             query='delete from cache_history where container_id in (select container_id from user_info_table where isGettingBlog<\'{time}\' and update_time is null)'\
