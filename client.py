@@ -974,7 +974,6 @@ class getHistory(threading.Thread):
                     info_str='Success: Page {url} is done'.format(url=url)
                     info_manager(info_str,type='NORMAL')
                 except Exception as e:
-
                     # 如果失败，则先将其解析为json格式
                     try:
                         page=json.load(page)
