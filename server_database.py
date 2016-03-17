@@ -366,6 +366,87 @@ class deal_cache_history(threading.Thread):
                 .format(cid=container_id)
             dbi.update_asQuery(query)
 
+class deal_update_mission(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        while True:
+            client=MongoClient('localhost',27017)
+            db=client['microblog_spider']
+            mission_mongo=db.update_mission
+            # 表示需要处理，但是现在无人处理的任务
+            res=mission_mongo.find({'isReported':{'$ne':None},'isDealing':None}).limit(1)
+            res=[x for x in res]
+
+            # 若没有待完成的任务，则该线程休眠1秒然后继续
+            if res.__len__()==0:
+                time.sleep(1)
+                continue
+
+            # 提取出需要处理的任务
+            task=res[0]
+            task.pop('_id')
+            mission_id=task['mission_id']
+            user_content=task['user_list']
+
+            # 将任务列表中的isDealing设置当前时间，表示当前任务开始受理
+            mission_mongo.update({'mission_id':mission_id},{'$set':{'isDealing':int(time.time())}})
+
+            # 获取包裹id和总包裹数
+            assemble_table=db.assemble_factory
+            res=assemble_table.find({'container_id':mission_id},{'current_id':1,'total_num':1})
+            id_list=[x['current_id'] for x in res]
+            num=int([x['total_num'] for x in assemble_table.find({'container_id':mission_id}).limit(1)][0])
+
+            #检查是否所有包裹已经到齐
+            check_state=True
+            if id_list.__len__()<num:
+                print('server->HistoryReport:The package is not complete, retry to catch data')
+                check_state=False
+
+            if check_state:
+                # 增加当前时间的转发，点赞和评论数，便于追踪
+                # 如果所有子包已经收集完毕，则将数据放入正式数据库mongodb各月份表和最近半月表
+
+                # 将数据从assemble factory中提取出来
+                try:
+                    data_list=assemble_table.find({'container_id':mission_id},{'data':1})
+                    data_list=[x['data'] for x in data_list]
+                    # todo fro debug-------------
+                    print('debug->datalist: {len}'.format(len=data_list.__len__()))
+                    #--------------------------------
+                except Exception as e:
+                    print('Error:server_database-deal_update_mission:'
+                          'Unable to get data from MongoDB, assemble factory,Reason:')
+                    print(e)
+
+                # 将碎片拼接
+                try:
+                    data_final=[]
+                    for i in data_list:
+                        data_final=data_final+i
+                    # todo fro debug-------------
+                    print('debug->数据拼接完毕,len {len}'.format(len=data_final.__len__()))
+                    #--------------------------------
+                except Exception as e:
+                    print('Error:server-HistoryReport:'
+                          'Unable to contact the pieces of information，Reason:')
+                    print(e)
+
+                # 增加当前时间的转发，点赞和评论数，便于追踪
+                user_list=[x['container_id'] for x in user_content]
+                # todo 当前任务未完成， 写下来的任务也还未完成
+
+            # 将assemble_factory中与当前任务有关数据清空
+            # 将mongodb，任务列表中当前任务项清空
+            # 清除mysql中相应用户的isGettingBlog
+
+
+
+
+
+
 class DB_manager(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)

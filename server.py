@@ -26,8 +26,11 @@ __author__ = 'multiangle'
 import threading
 import time
 import sys
+from random import Random
 
 # import from outer package
+from pymongo import MongoClient
+
 import tornado.web
 import tornado.ioloop
 import tornado.options
@@ -83,6 +86,7 @@ class ProxyHandler(tornado.web.RequestHandler):
             self.finish()
 
 class TaskHandler(tornado.web.RequestHandler):
+
     def get(self):
         global proxy
         uuid=str(self.get_argument('uuid'))
@@ -159,7 +163,10 @@ class TaskHandler(tornado.web.RequestHandler):
                   'where update_time<\'{target_time}\' and isGettingBlog is null limit {batch}' \
                 .format(target_time=target_time_stick,batch=100)
             res=dbi.select_asQuery(query)
+
+            # 将从mysql中取得的用户列表加上必要的变量以后发送给客户端
             res=[[line[0],int(time.mktime(line[1].timetuple())),int(time.mktime(line[2].timetuple()))] for line in res]
+            res_cp=res
             res=[line[0]+'-'+str(line[1])+'-'+str(line[2]) for line in res]
             inn=''
             for item in res:
@@ -170,7 +177,19 @@ class TaskHandler(tornado.web.RequestHandler):
             # 传送给客户端的指令格式： ContainerId-UpdateTime-LatestBlog;...;...;...,update
             self.write(commend)
             self.finish()
-            # todo 还有取出内容后对数据库的处理问题没解决，不可忘记
+
+            # 将用户列表，任务id,以及任务开始时间存入mongodb
+            u_list=[dict(container_id=x[0],update_time=x[1],latest_blog=x[2]) for x in res_cp]
+            data_toMongo=dict(
+                mission_id  =   random_str(15),
+                user_list   =   u_list,
+                mission_start=  int(time.time())
+            )
+            client=MongoClient('localhost',27017)
+            db=client['microblog_spider']
+            collec=db.update_mission
+            collec.insert(data_toMongo)
+            # todo 还需要将相关内容从mysql中设置isGettingBlog
 
     def task_assign(self,uuid):
         t_1=['1']         # get social web
@@ -343,7 +362,20 @@ class UpdateReport(tornado.web.RequestHandler):
             print(e)
             return
 
-        # todo 还没有做出接收到相应数据后的处理，不可忘记
+        # 将该任务在mongodb中设置为组装状态
+        client=MongoClient('localhost',27017)
+        db=client['microblog_spider']
+        collec=db.update_mission
+        collec.update({'mission_id':mission_id},{'$set':{'isReported':int(time.time())}})
+
+def random_str(randomlength=8):
+    str = ''
+    chars = 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789'
+    length = len(chars) - 1
+    random = Random()
+    for i in range(randomlength):
+        str+=chars[random.randint(0, length)]
+    return str
 
 if __name__=='__main__':
     proxy_lock=threading.Lock()         # proxy thread
