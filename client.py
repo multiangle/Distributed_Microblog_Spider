@@ -56,6 +56,8 @@ class client():          # the main process of client
             sub_thread=getInfo(self.proxy_pool,self.task_uid)
         if self.task_type=='history':
             sub_thread=getHistory(self.proxy_pool,self.task_uid)
+        if self.task_type=='update':
+            sub_thread=updateHistory(self.proxy_pool,self.task_uid)
             #TODO 判断其他种类的task该做什么
         sub_thread.start()
         inner_count=0
@@ -1006,6 +1008,7 @@ class getHistory(threading.Thread):
                         continue
 
 class parseMicroblogPage():
+
     def __init__(self):
         self.p_face=re.compile(r'\[.+?\]')
         self.p_face_i=re.compile(r'<i.+?</i>')
