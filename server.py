@@ -190,7 +190,16 @@ class TaskHandler(tornado.web.RequestHandler):
             db=client['microblog_spider']
             collec=db.update_mission
             collec.insert(data_toMongo)
-            # todo 还需要将相关内容从mysql中设置isGettingBlog
+
+            # 将相关内容从mysql中设置isGettingBlog
+            user_list_str=''
+            for line in res_cp:
+                user_list_str+='\'{cid}\','.format(cid=line[0])
+            user_list_str=user_list_str[:-1]
+            time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+            query='update user_info_table set isGettingBlog=\'{time}\' where container_id in ( {ulist} )'\
+                .format(time=time_stick,ulist=user_list_str)
+            dbi.update_asQuery(query)
 
     def task_assign(self,uuid):
         t_1=['1']         # get social web

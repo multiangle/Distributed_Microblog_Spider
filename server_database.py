@@ -437,6 +437,11 @@ class deal_update_mission(threading.Thread):
 
                 # 增加当前时间的转发，点赞和评论数，便于追踪,并制作成UpdateMany对象
                 user_list=[x['container_id'] for x in user_content]
+                user_list_str=''
+                for item in user_list:
+                    user_list_str+='\''+str(item)+'\','
+                user_list_str=user_list_str[:-1]
+
                 def temp_add_trace(line):
                     msg_id=line['id']
                     current_status=dict(
@@ -453,14 +458,51 @@ class deal_update_mission(threading.Thread):
                 requests=[temp_add_trace(x) for x in data_final]
                 latest_mongo=db.latest_history
                 latest_mongo.bulk_write(requests)
+
                 # todo 目前已经将表写入latest_history， 但是还没写入本月聚合，不可忘记
                 # todo 目前写的是将查到的所有内容都写入latest_history,并没有限定时间
 
-                # todo 清理Mydql，更新相关行数中的update_time和latest_blog
+                # 清理Mydql，更新相关行数中的update_time和latest_blog
+                time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+                # 找出各用户的最近更新时间
+                latest_list=[0]*user_list.__len__()
+                for line in data_final:
+                    this_timestick=int(line['created_timestamp'])
+                    this_container='100505'+str(line['user_id'])
+                    try:
+                        index=user_list.index(this_container)
+                        if latest_list[index]<this_timestick:
+                            latest_list[index]=this_timestick
+                    except:
+                        print('error:server_database->deal_update_mission:'
+                              'container {id} is not in user_list'.format(id=this_container))
+
+                # 将各用户最近更新时间固化为mysql更新语句。
+                case_list=''
+                updated_user_list=''
+                for i in range(latest_list.__len__()):
+                    if latest_list[i]>user_content[i]['latest_blog'] :
+                        time_stick_inner=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(latest_list[i]))
+                        case_list+=' when \'{cid}\' then \'{tstick}\' '.format(cid=user_list[i],tstick=time_stick_inner)
+                        updated_user_list+='\'{cid}\','.format(cid=user_list[i])
+                updated_user_list=updated_user_list[:-1]
+                # 构建mysql更新语句
+                query1='update user_info_table set update_time=\'{time}\' where container_id in ( {user_list} ) ;'\
+                    .format(time=time_stick,user_list=user_list_str)
+                query2='update user_info_table set latest_blog= case container_id {case_list} end where container_id in ( {ulist2} ) ;'\
+                    .format(case_list=case_list,ulist2=updated_user_list)
+                dbi=MySQL_Interface()
+                dbi.update_asQuery(query2)
+                dbi.update_asQuery(query1)
+                query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
+                    .format(user_list=user_list_str)
+                dbi.update_asQuery(query)
 
             else:
-                # todo 未完成mysql中的清理，将列表中相关行的isGettingBlog清空
-                query='update user_info_table set isGettingBlog where container_id in '
+                query='update user_info_table set isGettingBlog=null where container_id in ({user_list});'\
+                    .format(user_list=user_list_str)
+                dbi=MySQL_Interface()
+                dbi.update_asQuery(query)
 
             # 将assemble_factory中与当前任务有关数据清空
             assemble_table.remove({'container_id':mission_id})
@@ -468,27 +510,63 @@ class deal_update_mission(threading.Thread):
             # 将mongodb，任务列表中当前任务项清空
             mission_mongo.remove({'mission_id':mission_id})
 
+class clear_expired_update_mission(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
 
+    def run(self):
+        while True:
+            client=MongoClient('localhost',27017)
+            db=client['microblog_spider']
+            mission_mongo=db.update_mission
+            assemble_mongo=db.assemble_factory
+            current_time=int(time.time())
+            target_time=current_time-60*60*12   #将12个小时仍未完成的任务清除出去
+            expired_mission=mission_mongo.find({'mission_start':{'$lt':target_time}}).limit(1)
+            expired_mission=[x for x in expired_mission]
+            if expired_mission.__len__()==0:
+                # 如果没有符合要求的过期任务，则休眠
+                time.sleep(60)
+            else:
+                # 如果有过期的任务
+                expired_mission=expired_mission[0]
+                mission_id=expired_mission['mission_id']
+                user_content=expired_mission['user_list']
+                user_list=[x['container_id'] for x in user_content]
 
+                #　将mysql中相关用户isGettingBlog清空
+                user_list_str=''
+                for item in user_list:
+                    user_list_str+='\''+str(item)+'\','
+                user_list_str=user_list_str[:-1]
+                dbi=MySQL_Interface()
+                query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
+                    .format(user_list=user_list_str)
+                dbi.update_asQuery(query)
 
+                # 将assemble_factory中数据清空
+                assemble_mongo.remove({'container_id':mission_id})
 
-
+                # 将Mongo中该任务从任务表中清空。
+                mission_mongo.remove({'mission_id':mission_id})
 
 class DB_manager(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
 
-        # p1,p2,p3,p4 控制内容1
+        # p1,p2,p3,p4 used to get the atten web of user in microblog
         self.p1=deal_cache_attends()
         self.p2=deal_cache_user_info()
         self.p3=deal_fetching_user()
         self.p4=control_ready_table()
 
+        # p5, p6 are used to get the historical content of microblog
         self.p5=deal_isGettingBLog_user()
         self.p6=deal_cache_history()
 
+        # p7,p8 used to get the update content of microblog
         self.p7=deal_update_mission()
-
+        self.p8=clear_expired_update_mission()
 
     def run(self):
         self.p1.start()
@@ -498,6 +576,7 @@ class DB_manager(threading.Thread):
         self.p5.start()
         self.p6.start()
         self.p7.start()
+        self.p8.start()
         print('Process: deal_cache_attends is started ')
         print('Process: deal_cache_user_info is started ')
         print('Process: deal_fetching_user is started')
@@ -505,6 +584,7 @@ class DB_manager(threading.Thread):
         print('Process: deal_isGettingBLog_user is started')
         print('Process: deal_cache_history is started')
         print('Process: deal_update_mission is started')
+        print('Process: clear_expired_update_mission')
 
         while True:
             time.sleep(5)
@@ -536,6 +616,10 @@ class DB_manager(threading.Thread):
                 self.p7=deal_update_mission()
                 self.p7.start()
                 print('Process: deal_update_mission is restarted')
+            if not self.p8.is_alive():
+                self.p8=clear_expired_update_mission()
+                self.p8.start()
+                print('Process: clear_expired_update_mission is restarted')
 
 class SimpleHash():
     def __init__(self,cap,seed):

@@ -614,6 +614,9 @@ def check_server():
         try:
             res=request.urlopen(url,timeout=5).read()
             res=str(res,encoding='utf8')
+            # todo 异常危险！！！ 把checkserver这一步跳过了
+            break
+            #--------------------------------------------------
             if 'connection valid' in res:
                 break
             else:
@@ -1512,8 +1515,6 @@ class updateHistory(threading.Thread):
             # raise ConnectionError('Unable to return proxy')
             return
 
-
-
     class updateHistory_subThread(threading.Thread):
 
         def __init__(self,task_list,proxy_pool,contents,finished_user):
@@ -1561,7 +1562,7 @@ class updateHistory(threading.Thread):
                     res=pmp.parse_blog_page(page)
                     self.contents[:]=self.contents[:]+res
 
-                    if int(res[-1]['created_timestamp'])<int(latest_blog)-60*60*24*7:    #追踪到最后一条微博的前7天
+                    if int(res[-1]['created_timestamp'])<int(latest_blog)-60*60*24*10:    #追踪到最后一条微博的前7天
                         self.finished_user.append(container_id)
                         info_str='Success: user {cid} is done'.format(cid=container_id)
                         info_manager(info_str,type='NORMAL')
