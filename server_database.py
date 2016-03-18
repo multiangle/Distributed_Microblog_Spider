@@ -37,6 +37,7 @@ import re
 import random
 import sys
 from pymongo import MongoClient
+from pymongo import UpdateOne,UpdateMany
 
 # import from this folder
 import client_config as config
@@ -407,7 +408,7 @@ class deal_update_mission(threading.Thread):
 
             if check_state:
                 # 增加当前时间的转发，点赞和评论数，便于追踪
-                # 如果所有子包已经收集完毕，则将数据放入正式数据库mongodb各月份表和最近半月表
+                # 如果所有子包完毕，则将数据放入正式数据库mongodb各已经收集月份表和最近半月表
 
                 # 将数据从assemble factory中提取出来
                 try:
@@ -434,14 +435,35 @@ class deal_update_mission(threading.Thread):
                           'Unable to contact the pieces of information，Reason:')
                     print(e)
 
-                # 增加当前时间的转发，点赞和评论数，便于追踪
+                # 增加当前时间的转发，点赞和评论数，便于追踪,并制作成UpdateMany对象
                 user_list=[x['container_id'] for x in user_content]
-                # todo 当前任务未完成， 写下来的任务也还未完成
+                def temp_add_trace(line):
+                    msg_id=line['id']
+                    current_status=dict(
+                        comments_count=line['comments_count'],
+                        attitudes_count=line['attitudes_count'],
+                        reposts_count=line['reposts_count']
+                    )
+                    t=int(time.time())
+                    t_str=str(t)
+                    line['status_trace']={eval('\''+t_str+'\''):current_status}
+                    update_item=UpdateMany({'id':msg_id},{'$set':line},upsert=True)
+                    return update_item
+
+                requests=[temp_add_trace(x) for x in data_final]
+                latest_mongo=db.latest_history
+                latest_mongo.bulk_write(request)
+                # todo 目前已经将表写入latest_history， 但是还没写入本月聚合，不可忘记
+                # todo 目前写的是将查到的所有内容都写入latest_history,并没有限定时间
 
             # 将assemble_factory中与当前任务有关数据清空
-            # 将mongodb，任务列表中当前任务项清空
-            # 清除mysql中相应用户的isGettingBlog
+            assemble_table.remove({'container_id':mission_id})
 
+            # 将mongodb，任务列表中当前任务项清空
+            mission_mongo.remove({'mission_id':mission_id})
+
+            # 清除mysql中相应用户的isGettingBlog
+            # todo 未完成mysql中的清理
 
 
 

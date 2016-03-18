@@ -173,7 +173,8 @@ class TaskHandler(tornado.web.RequestHandler):
                 inn+=item+';'
             inn=inn[0:-1]
             # uid-stamp;uid-timestamp;...;,update  (the formation of order)
-            commend='{list};{task_id},update'.format(list=inn,task_id='oiajsdlfkj')
+            mission_id=random_str(15)
+            commend='{list};{task_id},update'.format(list=inn,task_id=mission_id)
             # 传送给客户端的指令格式： ContainerId-UpdateTime-LatestBlog;...;...;...,update
             self.write(commend)
             self.finish()
@@ -181,7 +182,7 @@ class TaskHandler(tornado.web.RequestHandler):
             # 将用户列表，任务id,以及任务开始时间存入mongodb
             u_list=[dict(container_id=x[0],update_time=x[1],latest_blog=x[2]) for x in res_cp]
             data_toMongo=dict(
-                mission_id  =   random_str(15),
+                mission_id  =   mission_id,
                 user_list   =   u_list,
                 mission_start=  int(time.time())
             )

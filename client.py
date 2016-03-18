@@ -1467,9 +1467,6 @@ class updateHistory(threading.Thread):
 
         self.return_proxy()
         os._exit(0)
-        #todo 全部数据传给服务器以后，向服务器报告，请求整理和新任务
-        #todo 服务器接收到数据以后的处理工作
-        #todo 服务器发送任务后，对应的数据库处理操作
 
     def return_proxy(self):
 
