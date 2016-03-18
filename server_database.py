@@ -446,15 +446,21 @@ class deal_update_mission(threading.Thread):
                     )
                     t=int(time.time())
                     t_str=str(t)
-                    line['status_trace']={eval('\''+t_str+'\''):current_status}
+                    line['status_trace.{date}'.format(date=t_str)]=current_status
                     update_item=UpdateMany({'id':msg_id},{'$set':line},upsert=True)
                     return update_item
 
                 requests=[temp_add_trace(x) for x in data_final]
                 latest_mongo=db.latest_history
-                latest_mongo.bulk_write(request)
+                latest_mongo.bulk_write(requests)
                 # todo 目前已经将表写入latest_history， 但是还没写入本月聚合，不可忘记
                 # todo 目前写的是将查到的所有内容都写入latest_history,并没有限定时间
+
+                # todo 清理Mydql，更新相关行数中的update_time和latest_blog
+
+            else:
+                # todo 未完成mysql中的清理，将列表中相关行的isGettingBlog清空
+                query='update user_info_table set isGettingBlog where container_id in '
 
             # 将assemble_factory中与当前任务有关数据清空
             assemble_table.remove({'container_id':mission_id})
@@ -462,8 +468,7 @@ class deal_update_mission(threading.Thread):
             # 将mongodb，任务列表中当前任务项清空
             mission_mongo.remove({'mission_id':mission_id})
 
-            # 清除mysql中相应用户的isGettingBlog
-            # todo 未完成mysql中的清理
+
 
 
 
@@ -482,6 +487,8 @@ class DB_manager(threading.Thread):
         self.p5=deal_isGettingBLog_user()
         self.p6=deal_cache_history()
 
+        self.p7=deal_update_mission()
+
 
     def run(self):
         self.p1.start()
@@ -490,12 +497,14 @@ class DB_manager(threading.Thread):
         self.p4.start()
         self.p5.start()
         self.p6.start()
+        self.p7.start()
         print('Process: deal_cache_attends is started ')
         print('Process: deal_cache_user_info is started ')
         print('Process: deal_fetching_user is started')
         print('Process: control_ready_table is started')
         print('Process: deal_isGettingBLog_user is started')
         print('Process: deal_cache_history is started')
+        print('Process: deal_update_mission is started')
 
         while True:
             time.sleep(5)
@@ -523,6 +532,10 @@ class DB_manager(threading.Thread):
                 self.p6=deal_cache_history()
                 self.p6.start()
                 print('Process: deal_cache_history is restarted')
+            if not self.p7.is_alive():
+                self.p7=deal_update_mission()
+                self.p7.start()
+                print('Process: deal_update_mission is restarted')
 
 class SimpleHash():
     def __init__(self,cap,seed):
