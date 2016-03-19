@@ -372,8 +372,8 @@ class deal_update_mission(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
+        client=MongoClient('localhost',27017)
         while True:
-            client=MongoClient('localhost',27017)
             db=client['microblog_spider']
             mission_mongo=db.update_mission
             # 表示需要处理，但是现在无人处理的任务
@@ -414,9 +414,7 @@ class deal_update_mission(threading.Thread):
                 try:
                     data_list=assemble_table.find({'container_id':mission_id},{'data':1})
                     data_list=[x['data'] for x in data_list]
-                    # todo fro debug-------------
-                    print('debug->datalist: {len}'.format(len=data_list.__len__()))
-                    #--------------------------------
+                    print('success->datalist: {len}'.format(len=data_list.__len__()))
                 except Exception as e:
                     print('Error:server_database-deal_update_mission:'
                           'Unable to get data from MongoDB, assemble factory,Reason:')
@@ -427,9 +425,7 @@ class deal_update_mission(threading.Thread):
                     data_final=[]
                     for i in data_list:
                         data_final=data_final+i
-                    # todo fro debug-------------
-                    print('debug->数据拼接完毕,len {len}'.format(len=data_final.__len__()))
-                    #--------------------------------
+                    print('success->数据拼接完毕,len {len}'.format(len=data_final.__len__()))
                 except Exception as e:
                     print('Error:server-HistoryReport:'
                           'Unable to contact the pieces of information，Reason:')
@@ -458,20 +454,30 @@ class deal_update_mission(threading.Thread):
                 requests=[temp_add_trace(x) for x in data_final]
                 latest_mongo=db.latest_history
                 latest_mongo.bulk_write(requests)
+                print('Success: server_database:UpdateMany列表生成，写入latest_history表成功,{len}'.format(len=requests.__len__()))
 
                 # 将获得数据写入各按月份分类的聚合中
                 table_list=[]
                 request_updateMonth=[]
                 for i in range(data_final.__len__()):
-                    temp_table_name='user_'+data_final[i]['created_at'][:7]
+                    temp_time=data_final[i]['created_at']
+                    temp_table_name='user_{year}_{month}'.format(year=temp_time[0:4],month=temp_time[5:7])
                     if temp_table_name in table_list:
                         request_updateMonth[table_list.index(temp_table_name)].append(requests[i])
                     else:
                         table_list.append(temp_table_name)
                         request_updateMonth.append([requests[i]])
+                print('the number of table is {len}'.format(len=request_updateMonth.__len__()))
+
                 for i in range(table_list.__len__()):
                     collection=eval('db.{name}'.format(name=table_list[i]))
-                    collection.bulk_write(request_updateMonth[i])
+                    # todo for debug----------------------------
+                    print('table {x} is started'.format(x=table_list[i]))
+                    #---------------------------------------------------
+                    if request_updateMonth[i].__len__()>0:
+                        collection.bulk_write(request_updateMonth[i])
+
+                print('Success:server_database:所获的数组已经写入按月分类聚合中')
 
                 # 清理Mydql，更新相关行数中的update_time和latest_blog
                 time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
@@ -505,9 +511,11 @@ class deal_update_mission(threading.Thread):
                 dbi=MySQL_Interface()
                 dbi.update_asQuery(query2)
                 dbi.update_asQuery(query1)
+                print('Success:server_database: UpdateTime和LatestBlog选项已更新')
                 query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
                     .format(user_list=user_list_str)
                 dbi.update_asQuery(query)
+                print('Success:erver_database: isGettingBlog选项已清除')
 
             else:
                 query='update user_info_table set isGettingBlog=null where container_id in ({user_list});'\
@@ -517,9 +525,11 @@ class deal_update_mission(threading.Thread):
 
             # 将assemble_factory中与当前任务有关数据清空
             assemble_table.remove({'container_id':mission_id})
+            print('Success:server_database: assemble_factory in Mongo is cleared')
 
             # 将mongodb，任务列表中当前任务项清空
             mission_mongo.remove({'mission_id':mission_id})
+            print('Success:server_database: this mission is cleared')
 
 class clear_expired_update_mission(threading.Thread):
     def __init__(self):
@@ -532,7 +542,7 @@ class clear_expired_update_mission(threading.Thread):
             mission_mongo=db.update_mission
             assemble_mongo=db.assemble_factory
             current_time=int(time.time())
-            target_time=current_time-60*60*12   #将12个小时仍未完成的任务清除出去
+            target_time=current_time-60*60*6   #将6个小时仍未完成的任务清除出去
             expired_mission=mission_mongo.find({'mission_start':{'$lt':target_time}}).limit(1)
             expired_mission=[x for x in expired_mission]
             if expired_mission.__len__()==0:

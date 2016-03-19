@@ -1,5 +1,5 @@
 =========================================================================================================
-The component and details of the project(__edition_0.8_)
+The component and details of the project(__edition_0.9_)
 ---------------------------------------------------------------------------------------------------------
 This is a Sina Weibo Spider archieved by server terminal and client terminal.
 The Server terminal mainly deal with 3 tasks.
@@ -25,6 +25,7 @@ The Server terminal mainly deal with 3 tasks.
 ==========================================================================================================
 
 UPDATE HISTORY:
+    _0.9_   :   add update function. Can update microblog
     _0.8_   :   start to use multi data servers and nginx
     _0.7_   :   the function of putting data to MongoDB is moved from server.py to server_database.py,
                 which improve the speed of reaction of main server

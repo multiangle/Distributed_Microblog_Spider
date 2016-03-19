@@ -78,7 +78,14 @@ class ProxyHandler(tornado.web.RequestHandler):
             self.finish()
         else:
             proxy_list=proxy.get(num)
-            proxy_list=['{url},{timedelay};'.format(url=x[0],timedelay=x[1]) for x in proxy_list]
+            try:
+                proxy_list=['{url},{timedelay};'.format(url=x[0],timedelay=x[1]) for x in proxy_list]
+            except Exception as e:
+                self.write('no valid proxy')
+                self.finish()
+                print('ERROR:server->ProxyHandler:')
+                print(e)
+                return
             res=''
             for i in proxy_list: res+=i
             res=res[0:-1]       # 'url,timedelay;url,timedelay;...,'
@@ -160,7 +167,7 @@ class TaskHandler(tornado.web.RequestHandler):
             current_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
             target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24)) #提早一天
             query='select container_id,update_time,latest_blog from user_info_table ' \
-                  'where update_time<\'{target_time}\' and isGettingBlog is null limit {batch}' \
+                  'where update_time<\'{target_time}\' and isGettingBlog is null and blog_num>10 order by fans_num desc limit {batch}' \
                 .format(target_time=target_time_stick,batch=100)
             res=dbi.select_asQuery(query)
 

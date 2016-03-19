@@ -157,7 +157,8 @@ class find_valid_proxy(threading.Thread):
                           .format(want_size=fetch_size,gotten_size=str(self.raw_proxy.__len__())))
             except Exception as e:
                 print('error: find_valid_proxy -> get_raw_proxy: ',e)
-                raise IOError('Unable to get raw proxy from website')
+                # raise IOError('Unable to get raw proxy from website')
+                print('Unable to get raw proxy from website')
 
 class check_proxy(threading.Thread):
     def __init__(self,raw_proxy,proxy_pool,raw_proxy_lock,proxy_lock):
