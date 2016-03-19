@@ -1072,6 +1072,8 @@ class parseMicroblogPage():
             'source',                      #用户客户端（iphone等）
             'pid',                         #不明，但是有必要保存，不一定有值
             'bid',                         #不明，但是有必要保存，不一定有值
+            'province',                     #省份id
+            'city',                          #城市id
             # 图片信息--------------------------------------------------------------
             'original_pic',               #图片相关，原始图片地址
             'bmiddle_pic',                #图片地址，与original_pic相比，只是把large换位bmiddle
