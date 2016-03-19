@@ -1172,6 +1172,10 @@ class parseMicroblogPage():
             if isinstance(temp,str):
                 temp=int(temp.replace('万','0000'))
             user['blog_num']=temp
+        if 'province' in keys:
+            user['province']=user_data['province']
+        if 'city' in keys:
+            user['city']=user_data['city']
         return user
 
     def parse_text(self,text):
