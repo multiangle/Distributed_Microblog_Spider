@@ -459,8 +459,19 @@ class deal_update_mission(threading.Thread):
                 latest_mongo=db.latest_history
                 latest_mongo.bulk_write(requests)
 
-                # todo 目前已经将表写入latest_history， 但是还没写入本月聚合，不可忘记
-                # todo 目前写的是将查到的所有内容都写入latest_history,并没有限定时间
+                # 将获得数据写入各按月份分类的聚合中
+                table_list=[]
+                request_updateMonth=[]
+                for i in range(data_final.__len__()):
+                    temp_table_name='user_'+data_final[i]['created_at'][:7]
+                    if temp_table_name in table_list:
+                        request_updateMonth[table_list.index(temp_table_name)].append(requests[i])
+                    else:
+                        table_list.append(temp_table_name)
+                        request_updateMonth.append([requests[i]])
+                for i in range(table_list.__len__()):
+                    collection=eval('db.{name}'.format(name=table_list[i]))
+                    collection.bulk_write(request_updateMonth[i])
 
                 # 清理Mydql，更新相关行数中的update_time和latest_blog
                 time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
@@ -550,6 +561,19 @@ class clear_expired_update_mission(threading.Thread):
                 # 将Mongo中该任务从任务表中清空。
                 mission_mongo.remove({'mission_id':mission_id})
 
+class clear_expired_update_content(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        while True:
+            client=MongoClient('localhost',27017)
+            db=client['microblog_spider']
+            latest_mongo=db.latest_history
+            t=int(time.time())
+            latest_mongo.remove({'created_timestamp':{'$lt':t}})
+            time.sleep(600)
+
 class DB_manager(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -568,6 +592,8 @@ class DB_manager(threading.Thread):
         self.p7=deal_update_mission()
         self.p8=clear_expired_update_mission()
 
+        self.p9=clear_expired_update_content()
+
     def run(self):
         self.p1.start()
         self.p2.start()
@@ -577,6 +603,7 @@ class DB_manager(threading.Thread):
         self.p6.start()
         self.p7.start()
         self.p8.start()
+        self.p9.start()
         print('Process: deal_cache_attends is started ')
         print('Process: deal_cache_user_info is started ')
         print('Process: deal_fetching_user is started')
@@ -585,6 +612,7 @@ class DB_manager(threading.Thread):
         print('Process: deal_cache_history is started')
         print('Process: deal_update_mission is started')
         print('Process: clear_expired_update_mission')
+        print('Process: clear_expired_update_content')
 
         while True:
             time.sleep(5)
@@ -620,6 +648,9 @@ class DB_manager(threading.Thread):
                 self.p8=clear_expired_update_mission()
                 self.p8.start()
                 print('Process: clear_expired_update_mission is restarted')
+            if not self.p9.is_alive():
+                self.p9.start()
+                print('Process: clear_expired_update_content')
 
 class SimpleHash():
     def __init__(self,cap,seed):
