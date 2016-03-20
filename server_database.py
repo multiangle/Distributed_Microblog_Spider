@@ -580,7 +580,7 @@ class clear_expired_update_content(threading.Thread):
             client=MongoClient('localhost',27017)
             db=client['microblog_spider']
             latest_mongo=db.latest_history
-            t=int(time.time())
+            t=int(time.time())-60*60*24*15
             latest_mongo.remove({'created_timestamp':{'$lt':t}})
             time.sleep(600)
 
