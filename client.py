@@ -1449,20 +1449,23 @@ class updateHistory(threading.Thread):
         opener=request.build_opener()
 
         try:
-            res=opener.open(req)
+            res=opener.open(req,timeout=10)
         except:
             times=0
-            while times<5:
+            while True:
                 times+=1
-                time.sleep(3)
                 try:
-                    res=opener.open(req)
+                    opener=request.build_opener()
+                    res=opener.open(req,timeout=10)
                     break
                 except:
                     warn_str='warn:updateHistory->run:' \
                              'unable to return history to server ' \
                              'try {num} times'.format(num=times)
-                    info_manager(warn_str,type='NORMAL')
+                    info_manager(warn_str,type='KEY')
+                if times>50:
+                    print('ERROR:unable to convey success info to server')
+                    os._exit(0)
 
         res=res.read().decode('utf8')
         if 'success' in res:
