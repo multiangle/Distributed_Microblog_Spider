@@ -137,7 +137,12 @@ class TaskHandler(tornado.web.RequestHandler):
                   'order by fans_num desc limit 1 ;'.format(valve=config.HISTORY_TASK_VALVE)
             # query='select container_id,blog_num from user_info_table ' \
             #       'order by rand() limit 1 ;'
-            [container_id,blog_num]=dbi.select_asQuery(query)[0]
+            res=dbi.select_asQuery(query)
+            if res.__len__()==0:
+                self.write('no task')
+                self.finish()
+                return
+            [container_id,blog_num]=res[0]
             self.write('{c_id};{blog},history'
                        .format(c_id=container_id,blog=blog_num))
             self.finish()
