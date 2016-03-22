@@ -160,7 +160,7 @@ class upload_sub(threading.Thread):
             stat['id']=self.thread_id
             stat['start']=time.time()
             try:
-                res=opener.open(req)
+                res=opener.open(req,timeout=20)
                 res=res.read().decode('utf8')
                 if 'success' in res:
                     stat['result']='success'
