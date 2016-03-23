@@ -1,8 +1,77 @@
 =========================================================================================================
+                                            INTRODUCTION
+
+        This is Distributed Microblog Spider which can used to getting the social network of users
+    and the microblog tweeted by users. Besides, it can update the latest information everyday.
+        The spider can mainly divided into two parts, the server and client. Server is responsable
+    for arranging tasks, collecting data, maintaining proxy pool and managing databases. While cli-
+    -ent is responsable for collecting data from website and sending them to server.
+
+=========================================================================================================
+                                             DEPENDENCY
+
+                      Language              :   Python 3.4
+
+                      External Python Lib   :   tornado
+                                                pymongo
+                                                redis
+                                                pymysql
+
+                      Database              :   MySQL
+                                                Redis
+                                                MongoDB
+
+                      Others                :   nginx
+
+                      URL   :   python  :   https://www.python.org/
+                                MySQL   :   http://www.mysql.com/downloads/
+                                MongoDB :   https://www.mongodb.org/
+                                Redis   :   http://redis.io/
+                                tornado :   http://www.tornadoweb.org/en/stable/
+                                nginx   :   http://nginx.org/
+
+=========================================================================================================
+                                              USAGE
+
+        Befor running this spider, you have to build several tables in MySQL first.
+        -------------------------------------------------------------
+        1. Build new database.  Name            :   microblog_spider
+                                Character Sets  :   gb2312
+                                Collations      :   gb2312_chinese_ci
+        -------------------------------------------------------------
+        2. Create some tables.  Name            :   accuracy_table
+                                Column          :   float   |   accuracy
+                                                    datetime|   time
+                                                    int     |   wanted_blog_num
+                                -------------------------------------
+                                Name            :   cache_atten_web
+                                Column          :   varchar |   from_uid
+                                                    int     |   from_fans_num
+                                                    int     |   from_blog_num
+                                                    varchar |   to_uid
+                                                    int     |   to_fans_num
+                                                    int     |   to_blog_num
+                                -------------------------------------
+                                Name            :   cache_attends
+                                Column          :   varchar |   uid
+                                                    varchar |   basic_page
+                                                    varchar |   name
+                                                    varchar |   gender
+                                                    int     |   blog_num
+                                                    varchar |   description
+                                                    int     |   fans_num
+                                -------------------------------------
+                                Name            :   cache_history
+                                Column          :   datetime|   latest_time
+                                                    int     |   latest_timestamp
+                                                    varchar |   container_id
+                                                    int     |   checkin_timestamp
+                                                    datetime|   is_dealing
+                                
 The component and details of the project(__edition_0.9_)
 ---------------------------------------------------------------------------------------------------------
-This is a Sina Weibo Spider archieved by server terminal and client terminal.
-The Server terminal mainly deal with 3 tasks.
+This is a Sina Microblog Spider archieved by server terminal and client terminal.
+The Server terminal mainly deal with 4 tasks.
 
     1.      Get proxy from http proxy website. Unfortunately, not all proxy scratched from website
         is valid. In fact, almost one quarter of them is valid. So, it is important to check if
@@ -14,10 +83,15 @@ The Server terminal mainly deal with 3 tasks.
         proxy in proxy pool is valid.
 
     2.      The second part is communicating with clients. Clients will require proxy and task from
-        server. While client finish the task of getting info of users, they will return the user info
+        server. When client finish the task of getting info of users, they will return the user info
         to server. When received this user info , server will store then in cache database.
 
-    3.      The 3rd part of function is dealing with the data in cache databases. The attends of user
+    3.      The 3rd part is about receiving the data translated from client. Sometimes client will
+        translate data which is sized of hundred of MBs. When server is receiving there data, the query
+        from other client will be denied. So it's necessary to add some data server which is used to
+        receive data specially.
+
+    4.      The 3rd part of function is dealing with the data in cache databases. The attends of user
         will be checked if already exist in user_info_table. If not, the user will be inserted into
         user_info_table. And no matter whether it exists, the user will be deleted from ready_to_get
         table. And ,as for attends, if they are not contained in user_info_table, they will be inserted
