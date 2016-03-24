@@ -1176,6 +1176,8 @@ class parseMicroblogPage():
             user['province']=user_data['province']
         if 'city' in keys:
             user['city']=user_data['city']
+        if 'profile_image_url' in keys:
+            user['profile_image_url']=user_data['profile_image_url']
         return user
 
     def parse_text(self,text):
