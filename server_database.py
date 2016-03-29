@@ -286,11 +286,13 @@ class deal_cache_history(threading.Thread):
 
                 # 将数据从assemble factory中提取出来
                 try:
-                    data_list=assemble_table.find({'container_id':container_id}, {'data': 1, 'current_id': 1})
-                    id_list = [x['current_id'] for x in data_list]
-                    data_list = [x['data'] for x in data_list]
+                    data_list = assemble_table.find({'container_id':container_id}, {'data': 1 , 'current_id': 1})
+                    data_list_ori = [x for x in data_list]
+                    data_list = [x['data'] for x in data_list_ori]
+                    id_list = [x['current_id'] for x in data_list_ori]
+                    data_list_ori = None
                     # todo fro debug-------------
-                    print('debug->datalist: {len}'.format(len=data_list.__len__()))
+                    print('debug->datalist: {len}'.format(len = data_list.__len__()))
                     # --------------------------------
                 except Exception as e:
                     print('Error:server-HistoryReturn:'
@@ -298,7 +300,7 @@ class deal_cache_history(threading.Thread):
                     print(e)
 
                 #　长度大于预期，说明有重复信息，需要去重
-                if id_list.__len__() > num :
+                if  id_list.__len__() > num :
                     unique_data_list = []
                     check_dict = {}
                     for i in range(id_list.__len__()) :
@@ -309,6 +311,9 @@ class deal_cache_history(threading.Thread):
                         except:
                             check_dict[str(id_list[i])] = True
                             unique_data_list.append(data_list[i])
+                            # print('data_list.len :{len}'.format(len=data_list.__len__()))
+                            # print('id_list.len :{len}'.format(len=id_list.__len__()))
+                            # print(i)
                     data_list = unique_data_list
 
                 # 将碎片拼接
