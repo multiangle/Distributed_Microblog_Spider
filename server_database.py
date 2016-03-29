@@ -241,27 +241,27 @@ class deal_cache_history(threading.Thread):
             latest_time=mysql_res[col_info.index('latest_time')]
             latest_timestamp=mysql_res[col_info.index('latest_timestamp')]
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            query='update cache_history set is_dealing=\'{time}\' where container_id={cid}'.format(time=time_stick,cid=container_id)
+            query = 'update cache_history set is_dealing=\'{time}\' where container_id={cid}'.format(time=time_stick, cid = container_id)
             # todo for delete-----
             print('debug->query1 : {q}'.format(q=query))
-            #------------------------
+            # ------------------------
             dbi.update_asQuery(query)
 
-            client=MongoClient('localhost',27017)
-            db=client['microblog_spider']
-            assemble_table=db.assemble_factory
-            res=assemble_table.find({'container_id':container_id},{'current_id':1,'total_num':1})
-            id_list=[x['current_id'] for x in res]
-            num=int([x['total_num'] for x in assemble_table.find({'container_id':container_id}).limit(1)][0])
+            client = MongoClient('localhost', 27017)
+            db = client['microblog_spider']
+            assemble_table = db.assemble_factory
+            res = assemble_table.find({'container_id': container_id}, {'current_id': 1, 'total_num': 1})
+            id_list = [x['current_id'] for x in res]
+            num = int([x['total_num'] for x in assemble_table.find({'container_id': container_id}).limit(1)][0])
             ## todo for delete-----
             print('debug->id_list_len: {len}'.format(len=id_list.__len__()))
             print('debug->num: {n}'.format(n=num))
-            #------------------------
-            #检查是否所有包裹已经到齐
-            check_state=True
-            if id_list.__len__()<num:
+            # ------------------------
+            # 检查是否所有包裹已经到齐
+            check_state = True
+            if id_list.__len__() < num:
                 print('server->HistoryReport:The package is not complete, retry to catch data')
-                check_state=False
+                check_state = False
 
             if check_state:
                 # 如果所有子包已经收集完毕，则将数据放入正式数据库mongodb
@@ -270,15 +270,15 @@ class deal_cache_history(threading.Thread):
 
                 # 从mysql获取该用户信息
                 try:
-                    query='select * from user_info_table where container_id=\'{cid}\'' \
+                    query = 'select * from user_info_table where container_id=\'{cid}\'' \
                         .format(cid=container_id)
-                    user_info=dbi.select_asQuery(query)[0]
+                    user_info = dbi.select_asQuery(query)[0]
                     # todo fro debug-------------
                     print('debug->query2: {q}'.format(q=query))
                     print('debug->user_info:')
                     print(user_info)
-                    #--------------------------------
-                    col_name=dbi.get_col_name('user_info_table')
+                    # --------------------------------
+                    col_name = dbi.get_col_name('user_info_table')
                 except Exception as e:
                     print('Error:server-HistoryReturn:'
                           'No such user in MySQL.user_info_table,Reason:')
@@ -286,39 +286,54 @@ class deal_cache_history(threading.Thread):
 
                 # 将数据从assemble factory中提取出来
                 try:
-                    data_list=assemble_table.find({'container_id':container_id},{'data':1})
-                    data_list=[x['data'] for x in data_list]
+                    data_list = assemble_table.find({'container_id': container_id}, {'data': 1})
+                    data_list = [x['data'] for x in data_list]
                     # todo fro debug-------------
                     print('debug->datalist: {len}'.format(len=data_list.__len__()))
-                    #--------------------------------
+                    # --------------------------------
                 except Exception as e:
                     print('Error:server-HistoryReturn:'
                         'Unable to get data from MongoDB, assemble factory,Reason:')
                     print(e)
 
+                #　长度大于预期，说明有重复信息，需要去重
+                if id_list.__len__() > num :
+                    id_list = [x['current_id'] for x in data_list]
+                    unique_data_list = []
+                    check_dict = {}
+                    for i in range(id_list.__len__()) :
+                        try:
+                            # 这里使用字典去重，（算是hash吧）
+                            check_dict[str(id_list[i])]
+                            continue
+                        except:
+                            check_dict[str(id_list[i])] = True
+                            unique_data_list.append(data_list[i])
+                    data_list = unique_data_list
+
                 # 将碎片拼接
                 try:
-                    data_final=[]
+                    data_final = []
                     for i in data_list:
-                        data_final=data_final+i
+                        data_final = data_final+i
                     # todo fro debug-------------
                     print('debug->数据拼接完毕,len {len}'.format(len=data_final.__len__()))
-                    #--------------------------------
+                    # --------------------------------
                 except Exception as e:
                     print('Error:server-HistoryReport:'
                           'Unable to contact the pieces of information，Reason:')
                     print(e)
 
                 # 将本次信息录入accuracy_table 用以进一步分析
-                blog_len=data_final.__len__()
-                wanted_blog_len=user_info[col_name.index('blog_num')]
-                blog_accuracy=blog_len/wanted_blog_len
-                time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-                query='insert into accuracy_table values ({acc},\'{t_s}\',{num}) ;' \
-                    .format(acc=blog_accuracy,t_s=time_stick,num=wanted_blog_len)
+                blog_len = data_final.__len__()
+                wanted_blog_len = user_info[col_name.index('blog_num')]
+                blog_accuracy = blog_len/wanted_blog_len
+                time_stick = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+                query = 'insert into accuracy_table values ({acc},\'{t_s}\',{num}) ;' \
+                    .format(acc=blog_accuracy, t_s=time_stick, num=wanted_blog_len)
                 dbi.insert_asQuery(query)
 
-                # 将数据录入Mongodb 更改Mydql,删除assemble中相关内容
+                # 将数据录入Mongodb 更改Mysql,删除assemble中相关内容
                 try:
                     if not user_info[col_name.index('update_time')]:
                         # 将数据存入 Mongodb 的formal collection
@@ -331,7 +346,7 @@ class deal_cache_history(threading.Thread):
                         print('Success: Data has been removed from assemble factory')
 
                         # # 将关键信息录入Mydql
-                        query='update user_info_table set ' \
+                        query = 'update user_info_table set ' \
                               'update_time=\'{up_time}\',' \
                               'latest_blog=\'{latest_blog}\',' \
                               'isGettingBlog=null ' \
