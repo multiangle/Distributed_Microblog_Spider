@@ -432,9 +432,11 @@ class deal_update_mission(threading.Thread):
 
                 # 将数据从assemble factory中提取出来
                 try:
-                    data_list=assemble_table.find({'container_id':mission_id}, {'data': 1, 'current_id': 1})
-                    id_list = [x['current_id'] for x in data_list]
-                    data_list=[x['data'] for x in data_list]
+                    data_list = assemble_table.find({'container_id':mission_id}, {'data': 1 , 'current_id': 1})
+                    data_list_ori = [x for x in data_list]
+                    data_list = [x['data'] for x in data_list_ori]
+                    id_list = [x['current_id'] for x in data_list_ori]
+                    data_list_ori = None
                     print('success->datalist: {len}'.format(len=data_list.__len__()))
                 except Exception as e:
                     print('Error:server_database-deal_update_mission:'
