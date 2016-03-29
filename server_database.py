@@ -287,6 +287,7 @@ class deal_cache_history(threading.Thread):
                 # 将数据从assemble factory中提取出来
                 try:
                     data_list = assemble_table.find({'container_id': container_id}, {'data': 1})
+                    id_list = [x['current_id'] for x in data_list]
                     data_list = [x['data'] for x in data_list]
                     # todo fro debug-------------
                     print('debug->datalist: {len}'.format(len=data_list.__len__()))
@@ -298,7 +299,6 @@ class deal_cache_history(threading.Thread):
 
                 #　长度大于预期，说明有重复信息，需要去重
                 if id_list.__len__() > num :
-                    id_list = [x['current_id'] for x in data_list]
                     unique_data_list = []
                     check_dict = {}
                     for i in range(id_list.__len__()) :
@@ -428,12 +428,27 @@ class deal_update_mission(threading.Thread):
                 # 将数据从assemble factory中提取出来
                 try:
                     data_list=assemble_table.find({'container_id':mission_id},{'data':1})
+                    id_list = [x['current_id'] for x in data_list]
                     data_list=[x['data'] for x in data_list]
                     print('success->datalist: {len}'.format(len=data_list.__len__()))
                 except Exception as e:
                     print('Error:server_database-deal_update_mission:'
                           'Unable to get data from MongoDB, assemble factory,Reason:')
                     print(e)
+
+                #　长度大于预期，说明有重复信息，需要去重
+                if id_list.__len__() > num :
+                    unique_data_list = []
+                    check_dict = {}
+                    for i in range(id_list.__len__()) :
+                        try:
+                            # 这里使用字典去重，（算是hash吧）
+                            check_dict[str(id_list[i])]
+                            continue
+                        except:
+                            check_dict[str(id_list[i])] = True
+                            unique_data_list.append(data_list[i])
+                    data_list = unique_data_list
 
                 # 将碎片拼接
                 try:
