@@ -211,6 +211,10 @@ class deal_isGettingBLog_user(threading.Thread):
             query="update user_info_table set isGettingBlog=null where isGettingBlog<\'{time}\' and update_time is null".format(time=time_stick)
             self.dbi.update_asQuery(query)
 
+            # 将cache_history中的残留项去除
+            query = "delete from cache_history where is_dealing<\'{time}\' ;".format(time = time_stick)
+            self.dbi.update_asQuery(query)
+
             time.sleep(60)
 
 class deal_cache_history(threading.Thread):
