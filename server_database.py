@@ -223,6 +223,7 @@ class deal_cache_history(threading.Thread):
 
     def run(self):
         while True:
+            start_time = time.time()
             dbi=MySQL_Interface()
             col_info=dbi.get_col_name('cache_history')
             query='select * from cache_history where is_dealing is null order by checkin_timestamp limit 1'
@@ -390,6 +391,10 @@ class deal_cache_history(threading.Thread):
             query='delete from cache_history where container_id=\'{cid}\'' \
                 .format(cid=container_id)
             dbi.update_asQuery(query)
+
+            end_time = time.time()
+            deal_time = end_time - start_time
+            print('Success : the user {cid} is completed, length is {len}, use {t} seconds'.format(cid = container_id, len = data_final.__len__(), t = deal_time))
 
 class deal_update_mission(threading.Thread):
     def __init__(self):
@@ -639,6 +644,10 @@ class DB_manager(threading.Thread):
         self.p5=deal_isGettingBLog_user()
         self.p6=deal_cache_history()
 
+        # self.deal_history = []
+        # for i in range(3) :
+        #     self.deal_history.append(deal_cache_history())
+
         # p7,p8 used to get the update content of microblog
         self.p7=deal_update_mission()
         self.p8=clear_expired_update_mission()
@@ -650,10 +659,16 @@ class DB_manager(threading.Thread):
         self.p2.start()
         self.p3.start()
         self.p4.start()
+
         self.p5.start()
         self.p6.start()
+        # for t in self.deal_history:
+        #     time.sleep(10)
+        #     t.start()
+
         self.p7.start()
         self.p8.start()
+
         self.p9.start()
         print('Process: deal_cache_attends is started ')
         print('Process: deal_cache_user_info is started ')
@@ -691,6 +706,14 @@ class DB_manager(threading.Thread):
                 self.p6=deal_cache_history()
                 self.p6.start()
                 print('Process: deal_cache_history is restarted')
+
+            # temp_len = self.deal_history.__len__()
+            # for i in range(temp_len):
+            #     if not self.deal_history[i].is_alive():
+            #         self.deal_history[i] = deal_isGettingBLog_user()
+            #         self.deal_history[i].start()
+            #         print('Process: deal_cache_history is restarted')
+
             if not self.p7.is_alive():
                 self.p7=deal_update_mission()
                 self.p7.start()
@@ -763,8 +786,12 @@ def save_data_seperately(dict_data):
         else:
             data_list[table_list.index(temp_table_name)].append(line)
     for i in range(table_list.__len__()):
+        start_time = time.time()
         collection=eval('db.{name}'.format(name=table_list[i]))
         collection.insert_many(data_list[i])
+        end_time = time.time()
+        time_gap = end_time - start_time
+        print('this part len is {len}, use {t} secs'.format(len = data_list[i].__len__(), t = time_gap))
 
 if __name__=='__main__':
     db_thread=DB_manager()              # database thread
