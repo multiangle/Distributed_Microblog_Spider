@@ -279,14 +279,14 @@ class deal_cache_history(threading.Thread):
                         .format(cid=container_id)
                     user_info = dbi.select_asQuery(query)[0]
                     # todo fro debug-------------
-                    print('debug->query2: {q}'.format(q=query))
-                    print('debug->user_info:')
+                    print('task {cid} :debug->query2: {q}'.format(q=query,cid=container_id))
+                    print('task {cid} debug->user_info:'.format(cid = container_id))
                     print(user_info)
                     # --------------------------------
                     col_name = dbi.get_col_name('user_info_table')
                 except Exception as e:
-                    print('Error:server-HistoryReturn:'
-                          'No such user in MySQL.user_info_table,Reason:')
+                    print('task {cid} :Error:server-HistoryReturn:'
+                          'No such user in MySQL.user_info_table,Reason:'.format(cid = container_id))
                     print(e)
 
                 # 将数据从assemble factory中提取出来
@@ -297,7 +297,7 @@ class deal_cache_history(threading.Thread):
                     id_list = [x['current_id'] for x in data_list_ori]
                     data_list_ori = None
                     # todo fro debug-------------
-                    print('debug->datalist: {len}'.format(len = data_list.__len__()))
+                    print('task {cid} debug->datalist: {len}'.format(len = data_list.__len__(),cid=container_id))
                     # --------------------------------
                 except Exception as e:
                     print('Error:server-HistoryReturn:'
@@ -327,7 +327,7 @@ class deal_cache_history(threading.Thread):
                     for i in data_list:
                         data_final = data_final+i
                     # todo fro debug-------------
-                    print('debug->数据拼接完毕,len {len}'.format(len=data_final.__len__()))
+                    print('task {cid} debug->数据拼接完毕,len {len}'.format(len=data_final.__len__(),cid=container_id))
                     # --------------------------------
                 except Exception as e:
                     print('Error:server-HistoryReport:'
@@ -348,12 +348,8 @@ class deal_cache_history(threading.Thread):
                     if not user_info[col_name.index('update_time')]:
                         # 将数据存入 Mongodb 的formal collection
                         save_data_seperately(data_final)
-                        print('Success: Data has saved in Mongodb, size is {size}'
-                              .format(size=sys.getsizeof(data_final)))
-
-                        # 将数据从assemble factory 去掉
-                        assemble_table.remove({'container_id':container_id})
-                        print('Success: Data has been removed from assemble factory')
+                        print('task {cid} Success: Data has saved in Mongodb, size is {size}'
+                              .format(size=sys.getsizeof(data_final),cid=container_id))
 
                         # # 将关键信息录入Mydql
                         query = 'update user_info_table set ' \
@@ -369,23 +365,29 @@ class deal_cache_history(threading.Thread):
                         #     .format(up_time=time_stick,latest_blog=latest_time,cid=container_id)
                         #TODO 这里为了方便统计，去掉了抹除isGetting这一项，但是正式运行的时候是要加上的
                         dbi.update_asQuery(query)
-                        print('Success: insert user into MongoDB, the num of data is {len}'
-                              .format(len=blog_len))
+                        print('task {cid} Success: insert user into MongoDB, the num of data is {len}'
+                              .format(len=blog_len,cid=container_id))
                     else:
                         query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
                             .format(cid=container_id)
                         dbi.update_asQuery(query)
 
                 except Exception as e:
-                    print('Error:server->HistoryReport:'
-                          'Reason:')
+                    print('task {cid} Error:server->HistoryReport:'
+                          'Reason:'.format(cid=container_id))
                     print(e)
             else:
-                # 如果所有子包不全，则抹掉isGettingBlog,将装配车间中数据删除,去掉cache_history中相应行
+                # 如果所有子包不全，则抹掉isGettingBlog,将装配车间中数据删除
+                print('task {cid} :Error: the package is not complete ,{a} of {b}'
+                      .format(a=id_list.__len__(),b=num,cid=container_id))
                 query='update user_info_table set isGettingBlog=null where container_id=\'{cid}\'' \
                     .format(cid=container_id)
                 dbi.update_asQuery(query)
-                assemble_table.remove({'container_id':container_id})
+
+            # 将数据从assemble factory 去掉
+            assemble_table.remove({'container_id':container_id})
+            print('task {cid} Success: Data has been removed from assemble factory'
+                    .format(cid=container_id))
 
             # 将cache_history中的相应行删掉，表示已经处理完该事物了
             query='delete from cache_history where container_id=\'{cid}\'' \
@@ -394,7 +396,8 @@ class deal_cache_history(threading.Thread):
 
             end_time = time.time()
             deal_time = end_time - start_time
-            print('Success : the user {cid} is completed, length is {len}, use {t} seconds'.format(cid = container_id, len = data_final.__len__(), t = deal_time))
+            print('task {cid} :Success : the user {cid} is completed, length is {len}, use {t} seconds'
+                  .format(cid = container_id, len = data_final.__len__(), t = deal_time))
 
 class deal_update_mission(threading.Thread):
     def __init__(self):
@@ -786,9 +789,16 @@ def save_data_seperately(dict_data):
         else:
             data_list[table_list.index(temp_table_name)].append(line)
     for i in range(table_list.__len__()):
+        print('ready to execute collec {c}, len is {len}'
+              .format(c=table_list[i],len=data_list[i].__len__()))
         start_time = time.time()
         collection=eval('db.{name}'.format(name=table_list[i]))
-        collection.insert_many(data_list[i])
+        try:
+            collection.insert_many(data_list[i])
+        except Exception as e:
+            print('error from save_data_seperately, error collec is {c}'
+                  .format(c=table_list[i]))
+            print(e)
         end_time = time.time()
         time_gap = end_time - start_time
         print('this part len is {len}, use {t} secs'.format(len = data_list[i].__len__(), t = time_gap))
