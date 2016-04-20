@@ -425,6 +425,7 @@ class deal_update_mission(threading.Thread):
 
             # 将任务列表中的isDealing设置当前时间，表示当前任务开始受理
             mission_mongo.update({'mission_id':mission_id},{'$set':{'isDealing':int(time.time())}})
+            print('Update Mission :{mi} set isDealing as {t}'.format(mi=mission_id,t=int(time.time())))
 
             # 获取包裹id和总包裹数
             assemble_table=db.assemble_factory
@@ -435,7 +436,8 @@ class deal_update_mission(threading.Thread):
             #检查是否所有包裹已经到齐
             check_state=True
             if id_list.__len__()<num:
-                print('server->HistoryReport:The package is not complete, retry to catch data')
+                print('Update Mission :{mi} The package is not complete, retry to catch data'
+                      .format(mi=mission_id))
                 check_state=False
 
             if check_state:
@@ -449,10 +451,10 @@ class deal_update_mission(threading.Thread):
                     data_list = [x['data'] for x in data_list_ori]
                     id_list = [x['current_id'] for x in data_list_ori]
                     data_list_ori = None
-                    print('success->datalist: {len}'.format(len=data_list.__len__()))
+                    print('Update Mission :{mi} success->datalist: {len}'.format(len=data_list.__len__(),mi=mission_id))
                 except Exception as e:
-                    print('Error:server_database-deal_update_mission:'
-                          'Unable to get data from MongoDB, assemble factory,Reason:')
+                    print('Update Mission :{mi} Error:server_database-deal_update_mission:'
+                          'Unable to get data from MongoDB, assemble factory,Reason:'.format(mi=mission_id))
                     print(e)
 
                 #　长度大于预期，说明有重复信息，需要去重
@@ -474,10 +476,11 @@ class deal_update_mission(threading.Thread):
                     data_final=[]
                     for i in data_list:
                         data_final=data_final+i
-                    print('success->数据拼接完毕,len {len}'.format(len=data_final.__len__()))
+                    print('Update Mission :{mi} success->数据拼接完毕,len {len}'
+                          .format(len=data_final.__len__(),mi=mission_id))
                 except Exception as e:
-                    print('Error:server-HistoryReport:'
-                          'Unable to contact the pieces of information，Reason:')
+                    print('Update Mission :{mi} Error:server-HistoryReport:'
+                          'Unable to contact the pieces of information，Reason:'.format(mi=mission_id))
                     print(e)
 
                 # 增加当前时间的转发，点赞和评论数，便于追踪,并制作成UpdateMany对象
@@ -503,7 +506,8 @@ class deal_update_mission(threading.Thread):
                 requests=[temp_add_trace(x) for x in data_final]
                 latest_mongo=db.latest_history
                 latest_mongo.bulk_write(requests)
-                print('Success: server_database:UpdateMany列表生成，写入latest_history表成功,{len}'.format(len=requests.__len__()))
+                print('Update Mission :{mi} Success: server_database:UpdateMany列表生成，'
+                      '写入latest_history表成功,{len}'.format(len=requests.__len__(),mi=mission_id))
 
                 # 将获得数据写入各按月份分类的聚合中
                 table_list=[]
@@ -524,9 +528,14 @@ class deal_update_mission(threading.Thread):
                     print('table {x} is started'.format(x=table_list[i]))
                     #---------------------------------------------------
                     if request_updateMonth[i].__len__()>0:
-                        collection.bulk_write(request_updateMonth[i])
+                        try:
+                            collection.bulk_write(request_updateMonth[i])
+                        except Exception as e:
+                            print('Update Mission :{mi} fail to update table {t}'
+                                  .format(mi=mission_id,t=table_list[i]))
 
-                print('Success:server_database:所获的数组已经写入按月分类聚合中')
+                print('Update Mission :{mi} Success:server_database:所获的数组已经写入按月分类聚合中'
+                      .format(mi=mission_id))
 
                 # 清理Mydql，更新相关行数中的update_time和latest_blog
                 time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
@@ -560,11 +569,12 @@ class deal_update_mission(threading.Thread):
                 dbi=MySQL_Interface()
                 dbi.update_asQuery(query2)
                 dbi.update_asQuery(query1)
-                print('Success:server_database: UpdateTime和LatestBlog选项已更新')
+                print('Update Mission :{mi} Success:server_database: UpdateTime和LatestBlog选项已更新'
+                      .format(mi=mission_id))
                 query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
                     .format(user_list=user_list_str)
                 dbi.update_asQuery(query)
-                print('Success:erver_database: isGettingBlog选项已清除')
+                print('Update Mission :{mi} Success:erver_database: isGettingBlog选项已清除'.format(mi=mission_id))
 
             else:
                 query='update user_info_table set isGettingBlog=null where container_id in ({user_list});'\
@@ -574,11 +584,13 @@ class deal_update_mission(threading.Thread):
 
             # 将assemble_factory中与当前任务有关数据清空
             assemble_table.remove({'container_id':mission_id})
-            print('Success:server_database: assemble_factory in Mongo is cleared')
+            print('Update Mission :{mi} Success:server_database: assemble_factory in Mongo is cleared'
+                  .format(mi=mission_id))
 
             # 将mongodb，任务列表中当前任务项清空
             mission_mongo.remove({'mission_id':mission_id})
-            print('Success:server_database: this mission is cleared')
+            print('Update Mission :{mi} Success:server_database: this mission is cleared'
+                  .format(mi=mission_id))
 
 class clear_expired_update_mission(threading.Thread):
     def __init__(self):
