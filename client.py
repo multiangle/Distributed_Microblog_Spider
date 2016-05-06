@@ -153,7 +153,7 @@ class client():          # the main process of client
                         'connect to proxy server '
                 info_manager(err_str,type='KEY')
                 if config.KEY_INFO_PRINT:
-                    print(e)
+                    print('Error from client.get_proxy_pool,reason:',e)
                 return
 
         if 'no valid proxy' in res:     # if server return no valid proxy, means server
@@ -241,7 +241,7 @@ class get_proxy_pool_thread(threading.Thread):
                         'unable to connect to proxy server '
                 info_manager(err_str,type='KEY')
                 if config.KEY_INFO_PRINT:
-                    print(e)
+                    print('Error from get_proxy_pool_thread.run:',e)
                 return
 
         if 'no valid proxy' in res:     # if server return no valid proxy, means server
@@ -535,10 +535,10 @@ class getInfo(threading.Thread):       # 用来处理第一类任务，获取用
                                 info_str='Success: Page {url} is done'.format(url=url)
                                 info_manager(info_str,type='KEY')
                             except:
-                                print(e)
+                                print('Error from getAttends_subThread.run_1:',e)
                                 pass    #如果再次失败，当前措施是直接跳过
                     except Exception as e:  #如果不是因为 “没有内容出错” 则出错原因不明，直接跳过
-                        if config.KEY_INFO_PRINT: print(e)
+                        if config.KEY_INFO_PRINT: print('Error from getAttends_subThread.run_2:',e)
                         err_str='error:getAttends_subThread->run:Unknown page type, ' \
                                 'fail to parse {url}'.format(url=url)
                         info_manager(err_str,type='NORMAL')
@@ -628,7 +628,7 @@ def check_server():
             err_str='error:client->check_server:cannot ' \
                     'connect to server; process sleeping'
             info_manager(err_str,type='NORMAL')
-            print(e)
+            print('Error from check_server',e)
             time.sleep(5)       # sleep for 1 seconds
 
 class Connector():
@@ -669,7 +669,7 @@ class Connector():
         except Exception as e:
             err_str='warn: Connector->getData : connect fail,ready to connect'
             info_manager(err_str,type='NORMAL')
-            if config.NOMAL_INFO_PRINT: print(e)
+            if config.NOMAL_INFO_PRINT: print('Error from Connector.getData:',e)
             proxy_count=1
             while(proxy_count<=proxy_num):
                 reconn_count=1
@@ -998,7 +998,7 @@ class getHistory(threading.Thread):
                             info_str='error: getHistory_subThread->run: ' \
                                      'fail to parse {url}'.format(url=url)
                             info_manager(info_str,type='KEY')
-                            print(e)
+                            print('Error from getHistory_subThread.run_1:',e)
                             continue
                     else:
                         info_str='error: getHistory_subThread->run: ' \
@@ -1006,7 +1006,7 @@ class getHistory(threading.Thread):
                         info_manager(info_str,type='KEY')
                         json.dump(page,open('{cid}-{pid}.json'.format(cid=re.findall(r'containerid=\d+',url)[0],
                                                                       pid=re.findall(r'page=\d+',url)[0]),'w'))
-                        print(e)
+                        print('Error from getHistory_subThread.run_2',e)
                         continue
 
 class parseMicroblogPage():
@@ -1604,13 +1604,13 @@ class updateHistory(threading.Thread):
                             info_str='error: getHistory_subThread->run: ' \
                                      'fail to parse {url}'.format(url=url)
                             info_manager(info_str,type='KEY')
-                            print(e)
+                            print('Error from updateHistory_subThread.run_1',e)
                             continue
                     else:
                         info_str='error: getHistory_subThread->run: ' \
                                  'fail to parse {url}'.format(url=url)
                         info_manager(info_str,type='KEY')
-                        print(e)
+                        print('Error from updateHistory_subThread.run_2',e)
                         continue
 
 def random_str(randomlength=8):
