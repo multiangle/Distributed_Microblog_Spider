@@ -15,5 +15,5 @@ for x in res:
         collec_list.append(x)
 for item in collec_list:
     collec=eval('db.{x}'.format(x=item))
-    collec.create_index([('id',pymongo.DESCENDING)])
+    collec.create_index([('user_id',pymongo.DESCENDING)])
     print(item+' is done')
