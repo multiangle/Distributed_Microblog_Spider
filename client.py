@@ -628,7 +628,7 @@ def check_server():
             err_str='error:client->check_server:cannot ' \
                     'connect to server; process sleeping'
             info_manager(err_str,type='NORMAL')
-            print('Error from check_server',e)
+            print('Error from check_server',e,' url is',url)
             time.sleep(5)       # sleep for 1 seconds
 
 class Connector():
