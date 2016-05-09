@@ -140,13 +140,13 @@ class client():          # the main process of client
         url='{url}/proxy/?num={num}'.format(url=config.SERVER_URL,num=num)
 
         try:
-            res=request.urlopen(url,timeout=5).read()
+            res=request.urlopen(url,timeout=10).read()
             res=str(res,encoding='utf8')
         except:
             time.sleep(5)
             check_server()     # sleep until server is available
             try:
-                res=request.urlopen(url,timeout=5).read()
+                res=request.urlopen(url,timeout=10).read()
                 res=str(res,encoding='utf8')
             except Exception as e:
                 err_str='error: client -> get_proxy_pool : unable to ' \
@@ -228,13 +228,13 @@ class get_proxy_pool_thread(threading.Thread):
         url='{url}/proxy/?num={num}'.format(url=config.SERVER_URL,num=self.num)
 
         try:
-            res=request.urlopen(url,timeout=5).read()
+            res=request.urlopen(url,timeout=10).read()
             res=str(res,encoding='utf8')
         except:
             time.sleep(5)
             check_server()     # sleep until server is available
             try:
-                res=request.urlopen(url,timeout=5).read()
+                res=request.urlopen(url,timeout=10).read()
                 res=str(res,encoding='utf8')
             except Exception as e:
                 err_str='error: get_proxy_pool_thread -> run : ' \
@@ -612,7 +612,7 @@ def check_server():
     while True:
 
         try:
-            res=request.urlopen(url,timeout=5).read()
+            res=request.urlopen(url,timeout=10).read()
             res=str(res,encoding='utf8')
             # todo 异常危险！！！ 把checkserver这一步跳过了
             break
