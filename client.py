@@ -987,6 +987,7 @@ class getHistory(threading.Thread):
                         else:
                             info_str='error:getHistory_subThread->run: the gotten data is not json'
                             info_manager(info_str,type='KEY')
+                            print(page)
                             continue
 
                     # 如果解析出的结果为 [没有内容]
