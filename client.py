@@ -1404,7 +1404,7 @@ class updateHistory(threading.Thread):
                 for i in range(config.THREAD_NUM):
                     if not threads_pool[i].is_alive():
                         threads_pool[i]=self.updateHistory_subThread(
-                            task_list,self.proxy_pool,contents)
+                            task_list,self.proxy_pool,contents,finished_user)
                         threads_pool[i].start()
             else:
                 all_stoped=True
