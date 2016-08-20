@@ -10,7 +10,7 @@ __author__ = 'multiangle'
 # 全局参数              global config info
 PROCESS_NUM             =2                #进程数目           number of process
 THREAD_NUM              =100                #每个进程最多线程   max thread num per process
-NOMAL_INFO_PRINT        =True            #普通信息显示       if print normal information
+NOMAL_INFO_PRINT        =False            #普通信息显示       if print normal information
 KEY_INFO_PRINT          =True            #关键信息显示       if print key information
 NORMAL_INFO_LOG         =True            #普通信息日志       if output normal info to log
 KEY_INFO_LOG            =True            #错误信息日志       if output key info to log

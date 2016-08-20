@@ -431,10 +431,16 @@ class deal_update_mission(threading.Thread):
             assemble_table=db.assemble_factory
             res=assemble_table.find({'container_id':mission_id},{'current_id':1,'total_num':1})
             id_list=[x['current_id'] for x in res]
-            num=int([x['total_num'] for x in assemble_table.find({'container_id':mission_id}).limit(1)][0])
+            check_state=True
+            try:
+                num=int([x['total_num'] for x in assemble_table.find({'container_id':mission_id}).limit(1)][0])
+            except:
+                print('deal_update_mission :{mi} can not get num info from mongo'
+                      .format(mi=mission_id))
+                num = 100000000
+                check_state = False
 
             #检查是否所有包裹已经到齐
-            check_state=True
             if id_list.__len__()<num:
                 print('Update Mission :{mi} The package is not complete, retry to catch data'
                       .format(mi=mission_id))

@@ -3,7 +3,7 @@ __author__ = 'multiangle'
 import pymysql
 
 class MySQL_Interface:
-    def __init__(self,host='127.0.0.1',user='root',pwd='',dbname='microblog_spider'):
+    def __init__(self,host='127.0.0.1',user='root',pwd='admin',dbname='microblog_spider'):
         self.host=host
         self.user=user
         self.passwd=pwd
@@ -246,9 +246,8 @@ class MySQL_Interface:
             return False
 
 if __name__=='__main__':
-    mi=MySQL_Interface(dbname='test')
+    mi=MySQL_Interface()
     # data=[('1','2'),('3','4'),('5','6')]
-    [data,col]=mi.select_all('hehe')
-    for x in data:
-        print(x)
-
+    query = 'select * from user_info_table limit 100'
+    res = mi.select_asQuery(query)
+    print(res)

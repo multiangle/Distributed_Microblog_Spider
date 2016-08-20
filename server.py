@@ -25,7 +25,7 @@ __author__ = 'multiangle'
 # import python package
 import threading
 import time
-import sys
+import sys,os
 from random import Random
 
 # import from outer package
@@ -170,7 +170,7 @@ class TaskHandler(tornado.web.RequestHandler):
         if task_id==4:   # this part is in test
             dbi=MySQL_Interface()
             current_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24)) #提早一天
+            target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24*5)) #提早5天
             query='select container_id,update_time,latest_blog from user_info_table ' \
                   'where update_time<\'{target_time}\' and isGettingBlog is null and blog_num>10 order by fans_num desc limit {batch}' \
                 .format(target_time=target_time_stick,batch=100)
@@ -296,7 +296,7 @@ class InfoReturn(tornado.web.RequestHandler):
                 pass
         except Exception as e:
             print(e)
-            path="temp\\{uid}_attends.pkl".format(uid=user_basic_info['uid'])
+            path="temp"+os.sep+"{uid}_attends.pkl".format(uid=user_basic_info['uid'])
             print('unable to store attends of {uid}, it will be stored '
                   .format(uid=user_basic_info['uid']))
             FI.save_pickle(attends,path)
@@ -313,7 +313,7 @@ class InfoReturn(tornado.web.RequestHandler):
                   .format(uid=user_basic_info['uid']))
         except Exception as e:
             print(e)
-            path='temp\\{uid}_basic_info.pkl'.format(uid=user_basic_info['uid'])
+            path='temp'+os.sep+'{uid}_basic_info.pkl'.format(uid=user_basic_info['uid'])
             print('unable to store basic info of {uid} , it will be stored'
                   .format(uid=user_basic_info['uid']))
             FI.save_pickle(user_basic_info,path)
