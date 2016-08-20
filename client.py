@@ -611,11 +611,12 @@ def check_server():
     url='{url}/auth'.format(url=config.SERVER_URL)
     while True:
 
+        # todo 异常危险！！！ 把checkserver这一步跳过了
+        break
+
         try:
             res=request.urlopen(url,timeout=10).read()
             res=str(res,encoding='utf8')
-            # todo 异常危险！！！ 把checkserver这一步跳过了
-            break
             #--------------------------------------------------
             if 'connection valid' in res:
                 break
@@ -744,9 +745,14 @@ def info_manager(info_str,type='NORMAL'):
     if type=='NORMAL':
         if config.NOMAL_INFO_PRINT:
             print(str)
-    if type=='KEY':
+    elif type=='KEY':
         if config.KEY_INFO_PRINT:
             print(str)
+    elif type=='DEBUG':
+        if config.KEY_INFO_PRINT:
+            print(str)
+    else:
+        print('error from info_manager : unknown info type')
 
 class getHistory(threading.Thread):
 
@@ -1572,9 +1578,14 @@ class updateHistory(threading.Thread):
                 try:
                     pmp=parseMicroblogPage()
                     res=pmp.parse_blog_page(page)
-                    self.contents[:]=self.contents[:]+res
-
-                    if int(res[-1]['created_timestamp'])<int(latest_blog)-60*60*24*10:    #追踪到最后一条微博的前7天
+                    valid_res = []
+                    for r in res:
+                        if int(r['created_timestamp'])<int(latest_blog)-60*60*24*10 \
+                                or int(r['created_timestamp'])<time.time()-60*60*24*80:  # 追踪到最后一条微博的前10天，或者是最近的80天
+                            valid_res.append(r)
+                    self.contents[:]=self.contents[:]+valid_res
+                    if valid_res.__len__()<res.__len__(): # invalid value apperaed, done
+                    # if int(res[-1]['created_timestamp'])<int(latest_blog)-60*60*24*10:    #追踪到最后一条微博的前7天
                         self.finished_user.append(container_id)
                         info_str='Success: user {cid} is done'.format(cid=container_id)
                         info_manager(info_str,type='NORMAL')

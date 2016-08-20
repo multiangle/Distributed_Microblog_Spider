@@ -11,7 +11,7 @@ class MySQL_Interface:
         try:
             self.conn=pymysql.connect(
                 user=self.user,
-                passwd=self.passwd,
+                password=self.passwd,
                 host=self.host,
                 db=self.db,
                 charset='utf8mb4'
