@@ -526,7 +526,21 @@ class deal_update_mission(threading.Thread):
                     else:
                         table_list.append(temp_table_name)
                         request_updateMonth.append([requests[i]])
-                print('the number of table is {len}'.format(len=request_updateMonth.__len__()))
+                print('the number of ori table is {len}'.format(len=request_updateMonth.__len__()))
+                print(table_list)
+                if table_list.__len__()>3:
+                    packed = [[table_list[i],request_updateMonth[i]]
+                              for i in range(table_list.__len__())]
+                    packed = sorted(packed, key=lambda x:x[0], reverse=True)
+                    packed = packed[:3]
+                    table_list = [x[0] for x in packed]
+                    request_updateMonth = [x[1] for x in packed]
+                print('the number of dealed table is {len}'.format(len=request_updateMonth.__len__()))
+                print(table_list)
+                print('{a}-{b}-{c}'.format(a=request_updateMonth[0].__len__(),
+                                           b=request_updateMonth[1].__len__(),
+                                           c=request_updateMonth[2].__len__()
+                                           ))
 
                 for i in range(table_list.__len__()):
                     collection=eval('db.{name}'.format(name=table_list[i]))

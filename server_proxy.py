@@ -136,10 +136,14 @@ class find_valid_proxy(threading.Thread):
             res=str(res,encoding='utf-8')
             self.raw_proxy=res.split('\r\n')
             if self.raw_proxy.__len__()<fetch_size:
-                print('*** warning: find_valid_proxy -> get_raw_proxy: '
-                      'the proxy num got from web is not enough \n '
-                      'the wanted size is {want_size}, the gotten size is {gotten_size}'
-                      .format(want_size=fetch_size,gotten_size=str(self.raw_proxy.__len__())))
+                # model = '*** warning: find_valid_proxy -> get_raw_proxy: '\
+                #         'the proxy num got from web is not enough \n '\
+                #         'the wanted size is {want_size}, the gotten size is {gotten_size}'
+                model = '*** warning: find_valid_proxy -> get_raw_proxy: ' \
+                        'the wanted size is {want_size}, the gotten size is {gotten_size}'
+                print(model.format(want_size=fetch_size,
+                                   gotten_size=str(self.raw_proxy.__len__())))
+
             else:
                 print('get {num} proxy from website'.format(num=fetch_size))
         except Exception as e:
@@ -356,10 +360,11 @@ class keep_proxy_valid(threading.Thread):
                 temp_list=[self.card_group_item_parse(x) for x in page['card_group']]
                 usetime=time.time()-t_start
                 self.proxy_pool.insert([c_proxy,usetime])
-                print('proxy {proxy} is valid, insert it'.format(proxy=c_proxy))
+                # print('proxy {proxy} is valid, insert it'.format(proxy=c_proxy))
             except Exception as e:
-                print(e)
-                print('proxy {proxy} is invalid ,drop it'.format(proxy=c_proxy))
+                pass
+                # print(e)
+                # print('proxy {proxy} is invalid ,drop it'.format(proxy=c_proxy))
 
     def getData(self,url,handler,timeout=10):
         headers= {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
