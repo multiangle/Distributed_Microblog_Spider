@@ -28,5 +28,25 @@ def create_index_all():
         collec.create_index([('user_id',pymongo.DESCENDING)])
         print(item+' is done')
 
-t = ['user_2016_05','user_2016_06','user_2016_07','user_2016_08']
-create_index_asTable(t)
+def auto_index():
+    client = MongoClient('localhost',27017)
+    db = client['microblog_spider']
+    collec_list = []
+    res=db.collection_names()
+    for x in res:
+        if 'user' in x:
+            collec_list.append(x)
+    print('****** start to check the index station of collections in mongodb ******')
+    for name in collec_list:
+        collec = db.get_collection(name)
+        indexs = [x for x in collec.list_indexes()]
+        if indexs.__len__()<3: # 此时没有索引
+            print('{n} do not have indexes yet, ready to craete'.format(n=name))
+            collec.create_index([('user_id',pymongo.DESCENDING)])
+            collec.create_index([('id',pymongo.DESCENDING)])
+        else:
+            # print('{n} has 3 indexs, done'.format(n=name))
+            pass
+    print('****** all indexes is created ******')
+
+auto_index()
