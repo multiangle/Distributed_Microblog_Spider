@@ -1580,12 +1580,13 @@ class updateHistory(threading.Thread):
                     res=pmp.parse_blog_page(page)
                     valid_res = []
                     for r in res:
-                        if int(r['created_timestamp'])<int(latest_blog)-60*60*24*10 \
-                                or int(r['created_timestamp'])<time.time()-60*60*24*80:  # 追踪到最后一条微博的前10天，或者是最近的80天
+                        # if int(r['created_timestamp'])>int(latest_blog)-60*60*24*10 \
+                        #         and int(r['created_timestamp'])>time.time()-60*60*24*80:  # 追踪到最后一条微博的前10天，或者是最近的80天
+                        if int(r['created_timestamp'])>time.time()-60*60*24*80:
+                            # if int(res[-1]['created_timestamp'])>int(latest_blog)-60*60*24*10:    #追踪到最后一条微博的前7天
                             valid_res.append(r)
                     self.contents[:]=self.contents[:]+valid_res
                     if valid_res.__len__()<res.__len__(): # invalid value apperaed, done
-                    # if int(res[-1]['created_timestamp'])<int(latest_blog)-60*60*24*10:    #追踪到最后一条微博的前7天
                         self.finished_user.append(container_id)
                         info_str='Success: user {cid} is done'.format(cid=container_id)
                         info_manager(info_str,type='NORMAL')

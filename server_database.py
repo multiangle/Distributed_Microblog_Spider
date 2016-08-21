@@ -528,19 +528,21 @@ class deal_update_mission(threading.Thread):
                         request_updateMonth.append([requests[i]])
                 print('the number of ori table is {len}'.format(len=request_updateMonth.__len__()))
                 print(table_list)
-                if table_list.__len__()>3:
+                selected_num = 5
+                if table_list.__len__()>selected_num:
                     packed = [[table_list[i],request_updateMonth[i]]
                               for i in range(table_list.__len__())]
                     packed = sorted(packed, key=lambda x:x[0], reverse=True)
-                    packed = packed[:3]
+                    packed = packed[:selected_num]
                     table_list = [x[0] for x in packed]
                     request_updateMonth = [x[1] for x in packed]
-                print('the number of dealed table is {len}'.format(len=request_updateMonth.__len__()))
-                print(table_list)
-                print('{a}-{b}-{c}'.format(a=request_updateMonth[0].__len__(),
-                                           b=request_updateMonth[1].__len__(),
-                                           c=request_updateMonth[2].__len__()
-                                           ))
+                    print('the number of dealed table is {len}'.format(len=request_updateMonth.__len__()))
+                    print(table_list)
+                if request_updateMonth.__len__()>=3:
+                    print('{a}-{b}-{c}'.format( a=request_updateMonth[0].__len__(),
+                                                b=request_updateMonth[1].__len__(),
+                                                c=request_updateMonth[2].__len__()
+                                                ))
 
                 for i in range(table_list.__len__()):
                     collection=eval('db.{name}'.format(name=table_list[i]))
@@ -591,16 +593,18 @@ class deal_update_mission(threading.Thread):
                 dbi.update_asQuery(query1)
                 print('Update Mission :{mi} Success:server_database: UpdateTime和LatestBlog选项已更新'
                       .format(mi=mission_id))
-                query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
-                    .format(user_list=user_list_str)
-                dbi.update_asQuery(query)
+                if user_list_str.__len__()>0:
+                    query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
+                        .format(user_list=user_list_str)
+                    dbi.update_asQuery(query)
                 print('Update Mission :{mi} Success:erver_database: isGettingBlog选项已清除'.format(mi=mission_id))
 
             else:
-                query='update user_info_table set isGettingBlog=null where container_id in ({user_list});'\
-                    .format(user_list=user_list_str)
-                dbi=MySQL_Interface()
-                dbi.update_asQuery(query)
+                if user_list_str.__len__()>0:
+                    query='update user_info_table set isGettingBlog=null where container_id in ({user_list});'\
+                        .format(user_list=user_list_str)
+                    dbi=MySQL_Interface()
+                    dbi.update_asQuery(query)
 
             # 将assemble_factory中与当前任务有关数据清空
             assemble_table.remove({'container_id':mission_id})
@@ -641,10 +645,11 @@ class clear_expired_update_mission(threading.Thread):
                 for item in user_list:
                     user_list_str+='\''+str(item)+'\','
                 user_list_str=user_list_str[:-1]
-                dbi=MySQL_Interface()
-                query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
-                    .format(user_list=user_list_str)
-                dbi.update_asQuery(query)
+                if user_list_str.__len__()>0:
+                    dbi=MySQL_Interface()
+                    query='update user_info_table set isGettingBlog=null where container_id in ({user_list});' \
+                        .format(user_list=user_list_str)
+                    dbi.update_asQuery(query)
 
                 # 将assemble_factory中数据清空
                 assemble_mongo.remove({'container_id':mission_id})

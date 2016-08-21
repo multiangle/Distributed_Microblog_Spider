@@ -176,6 +176,7 @@ class MySQL_Interface:
             self.cur.execute(query)
             self.conn.commit()
         except Exception as e:
+            print(query)
             print('Unable to update conent',e)
 
     # def update_content_asList(self,table_name,param_list):
