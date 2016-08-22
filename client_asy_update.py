@@ -172,8 +172,33 @@ class clientAsyUpdate():
             return
 
     def run(self):
-        pass
+        # 监控proxy pool,建议get_proxy_pool单独开一个线程，
+        # 如果server立即返回则马上关闭，否则设为长连接
+        if self.task_type=='update':
+            sub_thread = AsyUpdateHistory(self.proxy_pool,self.task_uid)
+        sub_thread.start()
+        inner_count = 0
+        while True:
+            inner_count += 1
+            time.sleep(0.1)  #每隔0.1秒检查情况
 
+            if inner_count==20:     # print the size of proxy pool
+                print('client->run: the size of proxy pool is ',
+                      self.proxy_pool.__len__())
+                inner_count=0
+
+            if self.proxy_pool.__len__()<int(config.PROXY_POOL_SIZE*2/3):
+                err_str='client->run : request proxy from server'
+                info_manager(err_str)
+                self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
+
+            if not sub_thread.is_alive():
+                # self.return_proxy()
+                break
+
+class AsyUpdateHistory():
+    def __init__(self):
+        pass
 
 def info_manager(info_str,type='NORMAL'):
     time_stick=time.strftime('%Y/%m/%d %H:%M:%S ||', time.localtime(time.time()))
