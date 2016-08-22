@@ -197,8 +197,69 @@ class clientAsyUpdate():
                 break
 
 class AsyUpdateHistory():
-    def __init__(self):
-        pass
+    def __init__(self,proxy_pool,task):
+        self.task = task
+        self.proxy_pool = proxy_pool
+
+    def run(self):
+        # ori_task_list是一个数组，里面每个元素格式：1005051003716184-1457818009-1446862845
+        ori_task_list=self.task.split(';')
+        self.mission_id=ori_task_list[-1]
+        ori_task_list=ori_task_list[0:-1]
+        def trans_task_dict(data):
+            ret = {}
+            tmp = data.split('-')
+            # 在下述字段中， reconn_limit表示单个代理下最多重连次数。
+            # 而
+            ret['container_id']     = tmp[0]        # container id
+            ret['update_time']      = tmp[1]        # update time
+            ret['latest_blog']      = tmp[2]        # latest blog
+            ret['reconn_times']     = 1             # 重连次数
+            ret['reconn_limit']     = config.LARGEST_TRY_TIMES # 最多重连次数(在使用一个ip情况下)
+            ret['proxy_current']    = None          # 当前Proxy
+            ret['proxy_used']       = 0             # 之前用过的proxy
+            ret['proxy_limit']      = 3             # 最多更换的proxy数目
+            return ret
+        task_dict_list = [trans_task_dict(x) for x in ori_task_list]
+        random.shuffle(task_dict_list)
+        contents = []
+
+    @asyncio.coroutine
+    async def updateHistory_asyMethod(self, task_dict, ret_content):
+
+        # 初始化变量
+        container_id    = task_dict['container_id']
+        update_time     = task_dict['update_time']
+        latest_blog     = task_dict['latest_blog']
+        reconn_times    = task_dict['reconn_times']
+        reconn_limit    = task_dict['reconn_limit']
+        proxy_current   = task_dict['proxy_current']
+        proxy_used      = task_dict['proxy_used']
+        proxy_limit     = task_dict['proxy_limit']
+
+        while proxy_used<=proxy_limit:  # proxy 循环, 也是最外层循环
+            prox = self.proxy_pool.get(1)
+
+    async def getSinglePage(self, url, proxy, reconn_limit, timeout=10):
+        conn = aiohttp.ProxyConnector(proxy=proxy, conn_timeout=5)
+        session = aiohttp.ClientSession(connector=conn)
+        session.get(url, )
+
+    async def __single_connect(self,
+                               url, proxy, reconn_limit,
+                               reconn_times=0, timeout=10):
+        headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
+                                 'AppleWebKit/600.1.3 (KHTML, like Gecko) Version/8.0 Mobile'
+                                 '/12A4345d Safari/600.1.4'}
+        conn = aiohttp.ProxyConnector(proxy=proxy, conn_timeout=timeout)
+        async with aiohttp.ClientSession(connector=conn) as session:
+            try:
+                async with session.get(url, headers=headers) as resp:
+                    content = await resp.read()
+                    content = content.decode('utf8')
+                    #TODO
+
+
 
 def info_manager(info_str,type='NORMAL'):
     time_stick=time.strftime('%Y/%m/%d %H:%M:%S ||', time.localtime(time.time()))
