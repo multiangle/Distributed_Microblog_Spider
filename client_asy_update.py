@@ -237,23 +237,66 @@ class AsyUpdateHistory():
         aconn = AsyConnector(self.proxy_pool)
 
         page_undealed_list = []
-
+        page = 1
+        # this func exec the normal seq, and there will be another func to deal with unsuccess page
         while True:
-            if page_task_list.__len__()==0:
-                break
-            page_id = page_task_list.pop(0)
-            url = url_model.format(cid=container_id,page=page_id)
-
             try:
-                await asyncio.sleep(max(random.gauss(0.3,0.1),0.05))
-                page = await aconn.getPage(url,proxy_limit,reconn_limit,timeout=10)
+                res = await self.getPageContent()
 
+    @asyncio.coroutine
+    async def getPageContent(self, url, proxy_limit,
+                             reconn_limit, timeout=10):
+        aconn = AsyConnector(self.proxy_pool)
+
+        # get page
+        try:
+            page = await aconn.getPage(url,
+                                          proxy_limit,
+                                          reconn_limit,
+                                          timeout=timeout)
+        except Exception as e:
+            raise IOError("Unable to get page , url:{u}"
+                               .format(u=url))
+        # parse page
+        try:
+            pmp = parseMicroblogPage()
+            res = pmp.parse_blog_page(page)
+            return res
+        except Exception as e:
+            raise ValueError("Unable to parse page, page:\n{p}".format(p=page))
 
 
 class AsyConnector():
     def __init__(self, proxy_pool, if_proxy=True):
         self.proxy_pool = proxy_pool
         self.if_proxy   = if_proxy
+
+    @asyncio.coroutine
+    async def getPage(self, url, proxy_limit, reconn_limit,
+                      proxy_used=0, timeout=10):
+        proxy = self.proxy_pool.get(1)
+        try:
+            page = await self.__single_connect(url,
+                                               proxy,
+                                               reconn_limit,
+                                               timeout=timeout)
+            print("success to get page after try {t} proxies"
+                  .format(t=proxy_used))
+            return page
+        except Exception as e:
+            print("Error from AsyConnector.getPage : reason:\n{e}"
+                  .format(e=e))
+            if proxy_used < proxy_limit:
+                print('this proxy seems invalid, ready to change one, '
+                      'the {i}th proxy'.format(i=proxy_used+1))
+                return await self.getPage(url,
+                                          proxy_limit,
+                                          reconn_limit,
+                                          proxy_used+1,
+                                          timeout=timeout)
+            else:
+                raise RuntimeError("** warning: can not get page, "
+                                   "boooooooooooom")
 
     @asyncio.coroutine
     async def __single_connect(self,url, proxy, reconn_limit,  # 处理单个proxy的任务
@@ -278,26 +321,10 @@ class AsyConnector():
                 else:
                     raise RuntimeError("** warning: can not get page, ready to change proxy and retry")
 
-    @asyncio.coroutine
-    async def getPage(self, url, proxy_limit, reconn_limit, proxy_used=0, timeout=10):
-        proxy = self.proxy_pool.get(1)
-        try:
-            page = await self.__single_connect(url,proxy,reconn_limit,timeout=timeout)
-            print("success to get page after try {t} proxies".format(t=proxy_used))
-            return page
-        except Exception as e:
-            print("Error from AsyConnector.getPage : reason:\n{e}".format(e=e))
-            if proxy_used < proxy_limit:
-                print('this proxy seems invalid, ready to change one, the {i}th proxy'.format(i=proxy_used+1))
-                return await self.getPage(url, proxy_limit, reconn_limit, proxy_used+1, timeout=timeout)
-            else:
-                raise RuntimeError("** warning: can not get page, boooooooooooom")
-
-
-
 
 def info_manager(info_str,type='NORMAL'):
-    time_stick=time.strftime('%Y/%m/%d %H:%M:%S ||', time.localtime(time.time()))
+    time_stick=time.strftime('%Y/%m/%d %H:%M:%S ||',
+                             time.localtime(time.time()))
     str=time_stick+info_str
     if type=='NORMAL':
         if config.NOMAL_INFO_PRINT:
