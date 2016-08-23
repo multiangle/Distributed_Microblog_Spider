@@ -29,6 +29,7 @@ import asyncio
 import client_config as config
 import File_Interface as FI
 from data_transport import upload_list
+from client import parseMicroblogPage
 #=======================================================================
 
 class clientAsyUpdate():
@@ -210,15 +211,12 @@ class AsyUpdateHistory():
             ret = {}
             tmp = data.split('-')
             # 在下述字段中， reconn_limit表示单个代理下最多重连次数。
-            # 而
             ret['container_id']     = tmp[0]        # container id
             ret['update_time']      = tmp[1]        # update time
             ret['latest_blog']      = tmp[2]        # latest blog
-            ret['reconn_times']     = 1             # 重连次数
-            ret['reconn_limit']     = config.LARGEST_TRY_TIMES # 最多重连次数(在使用一个ip情况下)
-            ret['proxy_current']    = None          # 当前Proxy
-            ret['proxy_used']       = 0             # 之前用过的proxy
+            ret['reconn_limit']     = 3             # 最多重连次数(在使用一个ip情况下)
             ret['proxy_limit']      = 3             # 最多更换的proxy数目
+            ret['retry_left']      = config.LARGEST_TRY_TIMES  # 最多重新尝试次数
             return ret
         task_dict_list = [trans_task_dict(x) for x in ori_task_list]
         random.shuffle(task_dict_list)
@@ -231,22 +229,34 @@ class AsyUpdateHistory():
         container_id    = task_dict['container_id']
         update_time     = task_dict['update_time']
         latest_blog     = task_dict['latest_blog']
-        reconn_times    = task_dict['reconn_times']
         reconn_limit    = task_dict['reconn_limit']
-        proxy_current   = task_dict['proxy_current']
-        proxy_used      = task_dict['proxy_used']
         proxy_limit     = task_dict['proxy_limit']
+        retry_left      = task_dict['retry_left']
 
-        while proxy_used<=proxy_limit:  # proxy 循环, 也是最外层循环
-            prox = self.proxy_pool.get(1)
+        url_model='http://m.weibo.cn/page/json?containerid={cid}_-_WEIBO_SECOND_PROFILE_WEIBO&page={page}'
+        aconn = AsyConnector(self.proxy_pool)
 
-    async def getSinglePage(self, url, proxy, reconn_limit, timeout=10):
-        conn = aiohttp.ProxyConnector(proxy=proxy, conn_timeout=5)
-        session = aiohttp.ClientSession(connector=conn)
-        session.get(url, )
+        page_undealed_list = []
 
-    async def __single_connect(self,
-                               url, proxy, reconn_limit,
+        while True:
+            if page_task_list.__len__()==0:
+                break
+            page_id = page_task_list.pop(0)
+            url = url_model.format(cid=container_id,page=page_id)
+
+            try:
+                await asyncio.sleep(max(random.gauss(0.3,0.1),0.05))
+                page = await aconn.getPage(url,proxy_limit,reconn_limit,timeout=10)
+
+
+
+class AsyConnector():
+    def __init__(self, proxy_pool, if_proxy=True):
+        self.proxy_pool = proxy_pool
+        self.if_proxy   = if_proxy
+
+    @asyncio.coroutine
+    async def __single_connect(self,url, proxy, reconn_limit,  # 处理单个proxy的任务
                                reconn_times=0, timeout=10):
         headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
                                  'AppleWebKit/600.1.3 (KHTML, like Gecko) Version/8.0 Mobile'
@@ -257,7 +267,32 @@ class AsyUpdateHistory():
                 async with session.get(url, headers=headers) as resp:
                     content = await resp.read()
                     content = content.decode('utf8')
-                    #TODO
+                print("success to get page after reconn {t} times".format(t=reconn_times))
+                return content
+            except Exception as e:
+                print("Error from AsyConnector.__single_connect: \nreason :{x}".format(x=e))
+                if reconn_times < reconn_limit:
+                    print("reconn again, the {i} times".format(i=reconn_times+1))
+                    return await self.__single_connect(url, proxy, reconn_limit,
+                                                       reconn_times+1, timeout=timeout)
+                else:
+                    raise RuntimeError("** warning: can not get page, ready to change proxy and retry")
+
+    @asyncio.coroutine
+    async def getPage(self, url, proxy_limit, reconn_limit, proxy_used=0, timeout=10):
+        proxy = self.proxy_pool.get(1)
+        try:
+            page = await self.__single_connect(url,proxy,reconn_limit,timeout=timeout)
+            print("success to get page after try {t} proxies".format(t=proxy_used))
+            return page
+        except Exception as e:
+            print("Error from AsyConnector.getPage : reason:\n{e}".format(e=e))
+            if proxy_used < proxy_limit:
+                print('this proxy seems invalid, ready to change one, the {i}th proxy'.format(i=proxy_used+1))
+                return await self.getPage(url, proxy_limit, reconn_limit, proxy_used+1, timeout=timeout)
+            else:
+                raise RuntimeError("** warning: can not get page, boooooooooooom")
+
 
 
 

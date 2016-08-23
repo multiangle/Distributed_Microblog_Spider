@@ -27,9 +27,11 @@ import threading
 import time
 import sys,os
 from random import Random
+from pprint import pprint
 
 # import from outer package
 from pymongo import MongoClient
+import pymongo
 
 import tornado.web
 import tornado.ioloop
@@ -167,18 +169,32 @@ class TaskHandler(tornado.web.RequestHandler):
                 .format(t_time=time_stick,cid=container_id)
             dbi.update_asQuery(query)
 
-        if task_id==4:   # this part is in test
+        if task_id==4 or task_id==100:   # this part is in test
             dbi=MySQL_Interface()
             current_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24*5)) #提早5天
+            target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24*1)) #提早5天
+            if task_id==4:
+                batch_size = 100
+            else:
+                batch_size = 10
             query='select container_id,update_time,latest_blog from user_info_table ' \
                   'where update_time<\'{target_time}\' and isGettingBlog is null and blog_num>10 order by fans_num desc limit {batch}' \
-                .format(target_time=target_time_stick,batch=100)
+                .format(target_time=target_time_stick,batch=batch_size)
+            # print(query)
             res=dbi.select_asQuery(query)
 
             # 将从mysql中取得的用户列表加上必要的变量以后发送给客户端
             res=[[line[0],int(time.mktime(line[1].timetuple())),int(time.mktime(line[2].timetuple()))] for line in res]
             res_cp=res
+
+            if res_cp.__len__()==0:  # if no task ,then return "no task"
+                print('*** warning: no avaliable update mission ***')
+                self.write('no task')
+                self.finish()
+                return
+
+            # print('debug from task handler')
+            # pprint(res_cp)
             res=[line[0]+'-'+str(line[1])+'-'+str(line[2]) for line in res]
             inn=''
             for item in res:
@@ -209,7 +225,7 @@ class TaskHandler(tornado.web.RequestHandler):
                 user_list_str+='\'{cid}\','.format(cid=line[0])
             user_list_str=user_list_str[:-1]
             time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-            query='update user_info_table set isGettingBlog=\'{time}\' where container_id in ( {ulist} )'\
+            query='update user_info_table set isGettingBlog=\'{time}\' where container_id in ({ulist})'\
                 .format(time=time_stick,ulist=user_list_str)
             dbi.update_asQuery(query)
 
@@ -399,7 +415,43 @@ def random_str(randomlength=8):
         str+=chars[random.randint(0, length)]
     return str
 
+def auto_index():
+    client = MongoClient('localhost',27017)
+    db = client['microblog_spider']
+    collec_list = []
+    res=db.collection_names()
+    for x in res:
+        if 'user' in x:
+            collec_list.append(x)
+    print('** start to check the index station of collections in mongodb **')
+    for name in collec_list:
+        collec = db.get_collection(name)
+        indexs = [x for x in collec.list_indexes()]
+        if indexs.__len__()<3: # 此时没有索引
+            print('{n} do not have indexes yet, ready to craete'.format(n=name))
+            collec.create_index([('user_id',pymongo.DESCENDING)])
+            collec.create_index([('id',pymongo.DESCENDING)])
+        else:
+            # print('{n} has 3 indexs, done'.format(n=name))
+            pass
+    print('** all indexes is created **')
+
+def start_selfcheck(): # 启动自检
+    print('\n\n********* start to selfcheck *********\n')
+    mi = MySQL_Interface()
+    if mi.cur :
+        print('mysql is connected')
+    client = MongoClient('localhost',27017)
+    print('mongodb is connected')
+    client.close()
+    auto_index()
+    print('\n********* selfcheck success  *********\n')
+
+
 if __name__=='__main__':
+
+    start_selfcheck()   # 启动自检
+
     proxy_lock=threading.Lock()         # proxy thread
     global proxy
     proxy=proxy_pool()
