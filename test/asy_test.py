@@ -2,6 +2,7 @@
 import asyncio
 import aiohttp
 
+@asyncio.coroutine
 async def asy_test(url, id, proxy_used=0):
         try:
             res = await singleConn(url,id)
@@ -15,6 +16,7 @@ async def asy_test(url, id, proxy_used=0):
                 # raise RuntimeError('2333333333333')
                 print('2333333333333')
 
+@asyncio.coroutine
 async def singleConn(url,id,times=0):
     headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
                              'AppleWebKit/600.1.3 (KHTML, like Gecko) Version/8.0 Mobile'
