@@ -32,14 +32,17 @@ from data_transport import upload_list
 from client import parseMicroblogPage
 #=======================================================================
 
-class clientAsyUpdate():
+class clientAsy():
     def __init__(self, uuid=None):
+        self.pm = PrintManager()
         self.task_uid = uuid
         self.task_type = None
         check_server()
         self.get_task()
         self.proxy_pool=[]
         self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
+        print(self.pm.gen_block_with_time("SUCCESS TO GET PROXY\nTHE SIZE IS {x}\nSTART TO RUN PROGRAM"
+                                          .format(x=self.proxy_pool.__len__())))
         self.run()
 
     def get_task(self):
@@ -47,6 +50,7 @@ class clientAsyUpdate():
         """
         get task user id from server
         """
+        print(self.pm.gen_block_with_time("MISSION START\nREADY TO GET TASK"))
         if not self.task_uid:
             self.task_uid = config.UUID
         url='{url}/task/?uuid={uuid}'.format(url=config.SERVER_URL,uuid=self.task_uid)
@@ -66,21 +70,23 @@ class clientAsyUpdate():
                 os._exit(0)
 
         if 'no task' in res:       # if server have no task uid ,return 'no task uid'
-            err_str= 'error: client -> get_task : ' \
-                     'unable to get task, sleep for 1 min and exit process'
-            info_manager(err_str,type='KEY')
+            info_manager(self.pm.gen_block_with_time("UNABLE TO GET TASK\nSLEEP FOR 1 MIN AND EXIT"),
+                         type="KEY",with_time=False)
             time.sleep(60)
             os._exit(0)
+
 
         try:        # try to parse task str
             res=res.split(',')
             self.task_uid=res[0]
             self.task_type=res[1]
         except:
-            err_str='error: client -> get_task : ' \
-                    'unable to split task str,exit process'
-            info_manager(err_str,type='KEY')
+            info_manager(self.pm.gen_block_with_time("UNABLE TO GET TASK\nSLEEP FOR 1 MIN AND EXIT"),
+                         type="KEY",with_time=False)
             os._exit(0)
+
+        info_manager(self.pm.gen_block_with_time("GOTTEN TASK\nREADY TO GET PROXY"),
+                     type='KEY',with_time=False)
 
     def get_proxy_pool(self,proxy_pool,num):
 
@@ -175,35 +181,90 @@ class clientAsyUpdate():
     def run(self):
         # 监控proxy pool,建议get_proxy_pool单独开一个线程，
         # 如果server立即返回则马上关闭，否则设为长连接
+
+        proxy_thread = proxy_keep_thread(self.proxy_pool)
+        proxy_thread.start()
+
         if self.task_type=='update':
-            sub_thread = AsyUpdateHistory(self.proxy_pool,self.task_uid)
-        sub_thread.start()
+            asyupdate = AsyUpdateHistory(self.proxy_pool,self.task_uid)
+            asyupdate.run()
+
+class proxy_keep_thread(threading.Thread):
+    def __init__(self,proxy_pool):
+        self.proxy_pool = proxy_pool
+        threading.Thread.__init__(self)
+
+    def run(self):
         inner_count = 0
         while True:
             inner_count += 1
-            time.sleep(0.1)  #每隔0.1秒检查情况
+            time.sleep(0.1)
 
-            if inner_count==20:     # print the size of proxy pool
-                print('client->run: the size of proxy pool is ',
-                      self.proxy_pool.__len__())
-                inner_count=0
-
+            if inner_count==20:
+                # print('proxy_keep_thread.run: ths size of pool is {x}'
+                #       .format(x=self.proxy_pool.__len__()))
+                inner_count = 0
             if self.proxy_pool.__len__()<int(config.PROXY_POOL_SIZE*2/3):
-                err_str='client->run : request proxy from server'
-                info_manager(err_str)
+                info_manager('proxy_keep_thread.run: request proxy from server')
                 self.get_proxy_pool(self.proxy_pool,config.PROXY_POOL_SIZE)
 
-            if not sub_thread.is_alive():
-                # self.return_proxy()
-                break
+    def get_proxy_pool(self,proxy_pool,num):
+
+        """
+        request certain number of proxy from server
+        :param num:
+        :return: None, but a list of proxy as formation of [[proxy(str),timeout(float)]...[]]
+                    will be added to self.proxy_pool
+        """
+
+        url='{url}/proxy/?num={num}'.format(url=config.SERVER_URL,num=num)
+
+        try:
+            res=request.urlopen(url,timeout=10).read()
+            res=str(res,encoding='utf8')
+        except:
+            time.sleep(5)
+            check_server()     # sleep until server is available
+            try:
+                res=request.urlopen(url,timeout=10).read()
+                res=str(res,encoding='utf8')
+            except Exception as e:
+                err_str='error: client -> get_proxy_pool : unable to ' \
+                        'connect to proxy server '
+                info_manager(err_str,type='KEY')
+                if config.KEY_INFO_PRINT:
+                    print('Error from client.get_proxy_pool,reason:',e)
+                return
+
+        if 'no valid proxy' in res:     # if server return no valid proxy, means server
+            # cannot provide proxy to this client
+            err_str='error: client -> get_proxy_pool : fail to ' \
+                    'get proxy from server'
+            info_manager(err_str,type='KEY')
+            time.sleep(1)
+            return
+
+        try:
+            data=res.split(';')             # 'url,timedelay;url,timedelay;.....'
+            data=[proxy_object(x) for x in data]
+        except Exception as e:
+            err_str='error: client -> get_proxy_pool : fail to ' \
+                    'parse proxy str info:\r\n'+res
+            info_manager(err_str,type='KEY')
+            return
+
+        proxy_pool[:]=proxy_pool[:]+data
 
 class AsyUpdateHistory():
     def __init__(self,proxy_pool,task):
         self.task = task
         self.proxy_pool = proxy_pool
         self.finished_user = []
+        self.exec_res = exec_status()
+        self.pm = PrintManager()
 
     def run(self):
+        info_manager(self.pm.gen_block_with_time("START AsyUpdateHistory"),type='KEY',with_time=False)
         # ori_task_list是一个数组，里面每个元素格式：1005051003716184-1457818009-1446862845
         ori_task_list=self.task.split(';')
         self.mission_id=ori_task_list[-1]
@@ -220,8 +281,41 @@ class AsyUpdateHistory():
             ret['retry_left']      = config.LARGEST_TRY_TIMES  # 最多重新尝试次数
             return ret
         task_dict_list = [trans_task_dict(x) for x in ori_task_list]
+
+        self.exec_res.set_total_user_num(task_dict_list.__len__())
+        exec_supervisor_thread = self.exec_supervisor(self.exec_res, self.pm)
+        exec_supervisor_thread.start()
+
         random.shuffle(task_dict_list)
-        contents = []
+        ret_content = []
+        page_undealed = []
+
+        info_manager(self.pm.gen_block_with_time("TASK ASSIGNED COMPLETE\n"
+                                                 "START TO HANDLE USER TASK"),
+                     type='KEY',with_time=False)
+        t0 = time.time()
+        loop = asyncio.get_event_loop()
+        user_tasks = [self.asyUpdateHistory_user(x,ret_content,page_undealed,timeout=10)
+                     for x in task_dict_list]
+        loop.run_until_complete(asyncio.wait(user_tasks))
+
+        t1 = time.time()
+        info_manager(self.pm.gen_block_with_time("TASK OF SINGLE USER IS FINISHED\n"
+                                                 "READY TO HANDLE FAILED TASKS\n"
+                                                 "USE {t} SECONDS".format(t=t1-t0)),
+                     type='KEY',with_time=False)
+
+        undealed_tasks = [self.asyUpdateHistory_undealed(x,ret_content,timeout=10)
+                          for x in page_undealed]
+        loop.run_until_complete(asyncio.wait(undealed_tasks))
+        loop.close()
+
+        t2 = time.time()
+        info_manager(self.pm.gen_block_with_time("TASK OF UNDEALED USER IS FINISHED\n"
+                                                 "THIS TASK USE {t} SECONDS\n"
+                                                 "TOTAL {t2} SECONDS").format(t=t2-t1,t2=t2-t0),
+                     type='KEY',with_time=False)
+
 
     @asyncio.coroutine
     async def asyUpdateHistory_user(self, task_dict, ret_content, page_undealed_list, timeout=10):
@@ -245,18 +339,26 @@ class AsyUpdateHistory():
                 break
             try:
                 url = self.url_model.format(cid=container_id,page=page)
+
+                self.exec_res.add_user_action(container_id)
+                self.exec_res.add_page_action(container_id,page)
+                time_start = time.time()
+
                 res = await self.getPageContent(url,proxy_limit,reconn_limit,timeout=timeout)
                 continue_err_page_count = 0
 
-                valid_res = self.pick_out_valid_res(res,latest_blog,update_time)
+                self.exec_res.add_page_success(container_id,page)
+                time_end = time.time()
+                self.exec_res.add_exec_time(time_end-time_start)
 
+                valid_res = self.pick_out_valid_res(res,latest_blog,update_time)
                 ret_content += valid_res
                 if valid_res.__len__()<res.__len__():
                     self.finished_user.append(container_id)
                     info_str = "Success: user {cid} is done".format(cid=container_id)
                     info_manager(info_str,type="NORMAL")
+                    self.exec_res.add_user_success(container_id)
                     break
-                page += 1
             except:
                 continue_err_page_count += 1
                 undealed_task = dict(
@@ -269,21 +371,30 @@ class AsyUpdateHistory():
                     retry_left      = retry_left,
                 )
                 page_undealed_list.append(undealed_task)
-                page += 1
+
+            page += 1
 
     @asyncio.coroutine
     async def asyUpdateHistory_undealed(self,task,ret_content,timeout=10):
         try:
             page_id = task['page_id']
             container_id = task['container_id']
-            url =
-            res = self.getPageContent(task['url'],
+            url = self.url_model.format(cid=container_id,page=page_id)
+            res = self.getPageContent(url,
                                       task['proxy_limit'],
                                       task['reconn_limit'],
                                       timeout=timeout
                                       )
-
-
+            valid_res = self.pick_out_valid_res(res,task['latest_blog'],task['update_time'])
+            ret_content += valid_res
+            print(' Success {cid}-page {i} is done'.format(cid=container_id,i=page_id))
+        except:
+            if task['retry_left'] > 0:
+                task['retry_left'] -= 1
+                await self.asyUpdateHistory_undealed(task,ret_content,timeout=timeout)
+            else:
+                pass
+                print('sorry about that {c} {i}'.format(c=container_id,i=page_id))
 
     @asyncio.coroutine
     async def getPageContent(self, url, proxy_limit,
@@ -316,6 +427,19 @@ class AsyUpdateHistory():
                 valid_res.append(r)
         return valid_res
 
+    class exec_supervisor(threading.Thread):
+        def __init__(self, exec_status, print_manager):
+            threading.Thread.__init__(self)
+            self.exec_status = exec_status
+            self.pm = print_manager
+        def run(self):
+            while True:
+                time.sleep(5)
+                info_manager(self.pm.gen_block_with_time(self.exec_status.anz_res()),
+                             type="KEY",with_time=False)
+
+
+
 class AsyConnector():
     def __init__(self, proxy_pool, if_proxy=True):
         self.proxy_pool = proxy_pool
@@ -324,7 +448,14 @@ class AsyConnector():
     @asyncio.coroutine
     async def getPage(self, url, proxy_limit, reconn_limit,
                       proxy_used=0, timeout=10):
-        proxy = self.proxy_pool.get(1)
+        while True:
+            if self.proxy_pool.__len__()>0:
+                proxy = 'http://'+self.proxy_pool.pop(0).url
+                break
+            else:
+                info_manager("AsyConnector.getPage.getproxy->"
+                             "unable to get proxy, sleep for 3 sec")
+                await asyncio.sleep(3)
         try:
             page = await self.__single_connect(url,
                                                proxy,
@@ -371,11 +502,13 @@ class AsyConnector():
                 else:
                     raise RuntimeError("** warning: can not get page, ready to change proxy and retry")
 
-
-def info_manager(info_str,type='NORMAL'):
+def info_manager(info_str,type='NORMAL',with_time=True):
     time_stick=time.strftime('%Y/%m/%d %H:%M:%S ||',
                              time.localtime(time.time()))
-    str=time_stick+info_str
+    if with_time:
+        str=time_stick+info_str
+    else:
+        str = info_str
     if type=='NORMAL':
         if config.NOMAL_INFO_PRINT:
             print(str)
@@ -419,8 +552,130 @@ def check_server():
             print('Error from check_server',e,' url is',url)
             time.sleep(5)       # sleep for 1 seconds
 
+class proxy_object():
+    def __init__(self,data):    # in this version ,data is in formation of [str(proxy),int(timedelay)]
+        self.raw_data=data
+        res=data.split(',')
+        self.url=res[0]
+        self.timedelay=res[1]
+    def getUrl(self):
+        return self.url
+    def getRawType(self):       #返回原来格式
+        return self.raw_data
+
+def generate_timestr():
+    tstr = time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(time.time()))
+    return tstr
+
+class PrintManager():
+    def gen_timestr(self):
+        tstr = time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(time.time()))
+        return tstr
+
+    def gen_center_str(self, content, len=42, frame="|||"):
+        if type(content)==str:
+            content = content.split("\n")
+            # content = [content]
+        ret = ""
+        for s in content:
+            left = len-frame.__len__()*2-s.__len__()
+            margin_left = left>>1
+            margin_right = left-margin_left
+            line = "{fr}{ml}{s}{mr}{fr}".format(
+                ml = " "*margin_left,
+                s = s,
+                mr = " "*margin_right,
+                fr = frame
+            )
+            ret += line+'\n'
+        return ret
+
+    def gen_block(self, content, len=42, frame="|||"):
+        ret = "="*len + '\n'
+        ret += self.gen_center_str(content,len,frame=frame)
+        ret += "="*len + '\n'
+        return ret
+
+
+    def gen_block_with_time(self, content, len=42, frame="|||"):
+        ret = "="*len+'\n'
+        time_s = self.gen_timestr()
+        timeline = "TIME: "+time_s
+        ret += self.gen_center_str(timeline,len,frame=frame)
+        return ret+self.gen_block(content,len,frame=frame)
+
+class exec_status():
+    def __init__(self):
+        self._mission_start_time        = time.time()
+        self._mission_end_time          = None
+        self._total_user_num            = None
+        self._action_user_set           = {}
+        self._finished_user_set         = {}
+        self._action_page_set           = {}
+        self._success_page_set          = {}
+        self._exec_time_list            = []
+
+        self._action_user_count         = 0
+        self._finished_user_count       = 0
+        self._action_page_count         = 0
+        self._success_page_count        = 0
+
+    def set_total_user_num(self,total_user_num):
+        self._total_user_num = total_user_num
+
+    def add_user_action(self, container_id):
+        gotten = self._action_user_set.get(container_id,0)
+        if gotten==0:
+            self._action_user_count += 1
+        self._action_user_set[container_id] = gotten + 1
+
+    def add_user_success(self, container_id):
+        gotten = self._finished_user_set.get(container_id,0)
+        if gotten==0:
+            self._finished_user_count += 1
+        self._finished_user_set[container_id] = gotten + 1
+
+    def add_page_action(self, container_id, page_id):
+        key = '{c}-{p}'.format(c=container_id, p=page_id)
+        gotten = self._action_page_set.get(key,0)
+        if gotten==0:
+            self._action_page_count += 1
+        self._action_page_set[key] = gotten + 1
+
+    def add_page_success(self, container_id, page_id):
+        key = '{c}-{p}'.format(c=container_id, p=page_id)
+        gotten = self._success_page_set.get(key,0)
+        if gotten==0:
+            self._success_page_count += 1
+        self._success_page_set[key] = gotten + 1
+
+    def add_exec_time(self,time_sec):
+        self._exec_time_list.append(time_sec)
+
+    def anz_res(self):
+        ret = ""
+        ret += "The user status is {a} / {b} / {c}\n".format(
+            a = self._finished_user_count,
+            b = self._action_user_count,
+            c = self._total_user_num
+        )
+        ret += "user success ratio: {p}\n".format(
+            p = self._finished_user_count/self._action_user_count)
+        ret += "The page status is {a} / {b}\n".format(
+            a = self._success_page_count,
+            b = self._action_page_count
+        )
+        ret += "page success ratio: {p}\n".format(
+            p = str(self._success_page_count/self._action_page_count)[:5]
+        )
+        ret += "this task lasted for {t} secs".format(
+            t = int (time.time() - self._mission_start_time))
+        return ret
+
+
 if __name__=='__main__':
     p_pool = []
     # uuid = int(input('client id : '))
     uuid = 4
+    clientAsy(uuid=100)
 
