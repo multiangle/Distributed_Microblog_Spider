@@ -1,6 +1,7 @@
 __author__ = 'multiangle'
 # import mysql.connector
 import pymysql
+import traceback
 
 class MySQL_Interface:
     def __init__(self,host='127.0.0.1',user='root',pwd='admin',dbname='microblog_spider'):
@@ -21,6 +22,7 @@ class MySQL_Interface:
         except Exception as e:
             print("ERROR:faile to connect mysql")
             print(e)
+            print(traceback.print_exc())
 
     def __del__(self):
         try:

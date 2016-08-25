@@ -180,7 +180,7 @@ class TaskHandler(tornado.web.RequestHandler):
             query='select container_id,update_time,latest_blog from user_info_table ' \
                   'where update_time<\'{target_time}\' and isGettingBlog is null and blog_num>10 order by fans_num desc limit {batch}' \
                 .format(target_time=target_time_stick,batch=batch_size)
-            # print(query)
+            print(query)
             res=dbi.select_asQuery(query)
 
             # 将从mysql中取得的用户列表加上必要的变量以后发送给客户端
@@ -234,6 +234,7 @@ class TaskHandler(tornado.web.RequestHandler):
         t_2=['2']         # get history weibo , get counter which blog_num<=15000 ,connect with server through www
         t_3=['3']         # get history weibo , get counter which blog_num>15000 ,connect with server through localhost
         t_4=['4']         # update weibo
+        t_5=['100']
         if uuid in t_1:
             return 1
         elif uuid in t_2:
@@ -242,6 +243,8 @@ class TaskHandler(tornado.web.RequestHandler):
             return 3
         elif uuid in t_4:
             return 4
+        elif uuid in t_5:
+            return 100
         else:
             return -1
 

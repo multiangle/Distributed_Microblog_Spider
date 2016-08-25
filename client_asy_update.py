@@ -260,15 +260,17 @@ class AsyUpdateHistory():
         self.task = task
         self.proxy_pool = proxy_pool
         self.finished_user = []
-        self.exec_res = exec_status()
+        self.exec_res = self.exec_status()
         self.pm = PrintManager()
 
     def run(self):
-        info_manager(self.pm.gen_block_with_time("START AsyUpdateHistory"),type='KEY',with_time=False)
         # ori_task_list是一个数组，里面每个元素格式：1005051003716184-1457818009-1446862845
         ori_task_list=self.task.split(';')
         self.mission_id=ori_task_list[-1]
         ori_task_list=ori_task_list[0:-1]
+        info_manager(self.pm.gen_block_with_time("START AsyUpdateHistory\n"
+                                                 "The mission id:{i}".format(i=self.mission_id)),
+                     type='KEY',with_time=False)
         def trans_task_dict(data):
             ret = {}
             tmp = data.split('-')
@@ -276,16 +278,21 @@ class AsyUpdateHistory():
             ret['container_id']     = tmp[0]        # container id
             ret['update_time']      = tmp[1]        # update time
             ret['latest_blog']      = tmp[2]        # latest blog
-            ret['reconn_limit']     = 3             # 最多重连次数(在使用一个ip情况下)
+            ret['reconn_limit']     = 2             # 最多重连次数(在使用一个ip情况下)
             ret['proxy_limit']      = 3             # 最多更换的proxy数目
-            ret['retry_left']      = config.LARGEST_TRY_TIMES  # 最多重新尝试次数
+            ret['retry_left']       = 1  # 最多重新尝试次数
             return ret
         task_dict_list = [trans_task_dict(x) for x in ori_task_list]
+        if config.NOMAL_INFO_PRINT:
+            cids = [x['container_id'] for x in task_dict_list]
+            print(cids)
 
+        # 对获取网页结果的监督进程，可以定时报告任务进度
         self.exec_res.set_total_user_num(task_dict_list.__len__())
         exec_supervisor_thread = self.exec_supervisor(self.exec_res, self.pm)
         exec_supervisor_thread.start()
 
+        # 打包分发任务，获取页面数据
         random.shuffle(task_dict_list)
         ret_content = []
         page_undealed = []
@@ -293,13 +300,13 @@ class AsyUpdateHistory():
         info_manager(self.pm.gen_block_with_time("TASK ASSIGNED COMPLETE\n"
                                                  "START TO HANDLE USER TASK"),
                      type='KEY',with_time=False)
-        t0 = time.time()
+        t0 = int(time.time())
         loop = asyncio.get_event_loop()
         user_tasks = [self.asyUpdateHistory_user(x,ret_content,page_undealed,timeout=10)
                      for x in task_dict_list]
         loop.run_until_complete(asyncio.wait(user_tasks))
 
-        t1 = time.time()
+        t1 = int(time.time())
         info_manager(self.pm.gen_block_with_time("TASK OF SINGLE USER IS FINISHED\n"
                                                  "READY TO HANDLE FAILED TASKS\n"
                                                  "USE {t} SECONDS".format(t=t1-t0)),
@@ -310,11 +317,130 @@ class AsyUpdateHistory():
         loop.run_until_complete(asyncio.wait(undealed_tasks))
         loop.close()
 
-        t2 = time.time()
+        t2 = int(time.time())
         info_manager(self.pm.gen_block_with_time("TASK OF UNDEALED USER IS FINISHED\n"
                                                  "THIS TASK USE {t} SECONDS\n"
                                                  "TOTAL {t2} SECONDS").format(t=t2-t1,t2=t2-t0),
                      type='KEY',with_time=False)
+        exec_supervisor_thread.stop()
+
+        # 页面获取完毕，开始去除重复元素
+        contents = ret_content
+        content_unique=[]      # pick out the repeated content
+        content_msgid=[]
+        for i in range(contents.__len__()):
+            if contents[i]['idstr'] not in content_msgid:
+                content_msgid.append(contents[i]['idstr'])
+                content_unique.append(contents[i])
+            else:
+                pass
+
+        # transport the data to data server
+        start_time=int(time.time())
+        url='{url}/history_data'.format(url=config.DATA_SERVER_URL)
+        upload=upload_history(content_unique,url,15,10,self.mission_id)
+        upload.run()
+        end_time=int(time.time())
+        time_gap=end_time-start_time
+        info_manager(self.pm.gen_block_with_time("Success to upload data\n"
+                                                 "of {cid} to data server\n"
+                                                 "use {gap} secs"
+                                                 .format(cid=self.mission_id,gap=time_gap)),
+                     type="KEY",with_time=False)
+
+        updateHistory={
+            'mission_id':self.mission_id
+        }
+
+        try:
+            data=parse.urlencode(updateHistory).encode('utf8')
+        except:
+            err_str='error:updateHistory->run: ' \
+                    'unable to parse update history data'
+            info_manager(err_str,type='KEY')
+            raise TypeError('Unable to parse update history')
+
+        url='{url}/update_report'.format(url=config.SERVER_URL)
+        req=request.Request(url,data)
+        opener=request.build_opener()
+
+        try:
+            res=opener.open(req,timeout=10)
+        except:
+            times=0
+            while True:
+                times+=1
+                try:
+                    opener=request.build_opener()
+                    res=opener.open(req,timeout=10)
+                    break
+                except:
+                    warn_str='warn:updateHistory->run:' \
+                             'unable to return history to server ' \
+                             'try {num} times'.format(num=times)
+                    info_manager(warn_str,type='KEY')
+                if times>50:
+                    print('ERROR:unable to convey success info to server')
+                    os._exit(0)
+
+        res=res.read().decode('utf8')
+        if 'success' in res:
+            suc_str='Success:updateHistory->run:\n'\
+                    'Success to return update to server'
+            info_manager(self.pm.gen_block_with_time(suc_str),type="KEY",with_time=False)
+        else:
+            string='warn: updateHistory->run: \n' \
+                   'get user update, \n' \
+                   'but report was denied by server'
+            info_manager(self.pm.gen_block_with_time(string),type='KEY',with_time=False)
+
+        self.return_proxy()
+        os._exit(0)
+
+    def return_proxy(self):
+
+        """
+        return useful or unused proxy to server
+        """
+
+        # check_server()
+        url='{url}/proxy_return'.format(url=config.SERVER_URL)
+        proxy_ret= [x.raw_data for x in self.proxy_pool]
+        proxy_str=''
+
+        for item in proxy_ret:
+            proxy_str=proxy_str+item+';'
+        proxy_str=proxy_str[0:-1]
+        data={
+            'data':proxy_str
+        }
+
+        data=parse.urlencode(data).encode('utf-8')
+
+        try:
+            opener=request.build_opener()
+            req=request.Request(url,data)
+            res=opener.open(req).read().decode('utf-8')
+        except:
+            try:
+                opener=request.build_opener()
+                req=request.Request(url,data)
+                res=opener.open(req).read().decode('utf-8')
+            except:
+                err_str='error:client->return_proxy:unable to ' \
+                        'connect to server'
+                info_manager(err_str,type='KEY')
+                return
+
+        if 'return success' in res:
+            print('Success: return proxy to server')
+            return
+        else:
+            err_str='error:client->return_proxy:'+res
+            info_manager(err_str,type='KEY')
+            # raise ConnectionError('Unable to return proxy')
+            return
+
 
 
     @asyncio.coroutine
@@ -336,6 +462,9 @@ class AsyUpdateHistory():
         continue_err_page_count = 0
         while True:
             if continue_err_page_count>5:
+                print('warning: the continue_err_page_count come up to 5, finish {c} task'
+                      .format(c=container_id))
+                self.exec_res.add_user_finish(container_id)
                 break
             try:
                 url = self.url_model.format(cid=container_id,page=page)
@@ -361,6 +490,8 @@ class AsyUpdateHistory():
                     break
             except:
                 continue_err_page_count += 1
+                print('{i} continue_err_page_count : {c}'
+                      .format(c=continue_err_page_count,i=container_id))
                 undealed_task = dict(
                     container_id    = container_id,
                     page_id         = page,
@@ -380,7 +511,7 @@ class AsyUpdateHistory():
             page_id = task['page_id']
             container_id = task['container_id']
             url = self.url_model.format(cid=container_id,page=page_id)
-            res = self.getPageContent(url,
+            res = await self.getPageContent(url,
                                       task['proxy_limit'],
                                       task['reconn_limit'],
                                       timeout=timeout
@@ -421,9 +552,9 @@ class AsyUpdateHistory():
     def pick_out_valid_res(self,init_res,latest_blog,update_time):
         valid_res = []
         for r in init_res:
-            # if int(r['created_timestamp'])>int(latest_blog)-60*60*24*10 \
-            #         and int(r['created_timestamp'])>time.time()-60*60*24*80:  # 追踪到最后一条微博的前10天，或者是最近的80天
-            if int(r['created_timestamp'])>time.time()-60*60*24*80:
+            if int(r['created_timestamp'])>int(latest_blog)-60*60*24*10 \
+                    and int(r['created_timestamp'])>time.time()-60*60*24*80:  # 追踪到最后一条微博的前10天，或者是最近的80天
+            # if int(r['created_timestamp'])>time.time()-60*60*24*80:
                 valid_res.append(r)
         return valid_res
 
@@ -432,13 +563,102 @@ class AsyUpdateHistory():
             threading.Thread.__init__(self)
             self.exec_status = exec_status
             self.pm = print_manager
+            self.go = True
+
         def run(self):
-            while True:
+            while self.go:
                 time.sleep(5)
-                info_manager(self.pm.gen_block_with_time(self.exec_status.anz_res()),
-                             type="KEY",with_time=False)
+                if self.go:
+                    info_manager(self.pm.gen_block_with_time(self.exec_status.anz_res()),
+                                 type="KEY",with_time=False)
 
+        def stop(self):
+            self.go = False
 
+    class exec_status():
+        def __init__(self):
+            self._mission_start_time        = time.time()
+            self._mission_end_time          = None
+            self._total_user_num            = None
+            self._action_user_set           = {}
+            self._finished_user_set         = {}
+            self._success_user_set          = {}
+            self._action_page_set           = {}
+            self._success_page_set          = {}
+            self._exec_time_list            = []
+
+            self._action_user_count         = 0
+            self._finished_user_count       = 0
+            self._success_user_count        = 0
+            self._action_page_count         = 0
+            self._success_page_count        = 0
+
+        def set_total_user_num(self,total_user_num):
+            self._total_user_num = total_user_num
+
+        def add_user_action(self, container_id):
+            gotten = self._action_user_set.get(container_id,0)
+            if gotten==0:
+                self._action_user_count += 1
+            self._action_user_set[container_id] = gotten + 1
+
+        def add_user_success(self, container_id):
+            gotten = self._success_user_set.get(container_id,0)
+            if gotten==0:
+                self._success_user_count += 1
+            self._success_user_set[container_id] = gotten + 1
+            self.add_user_finish(container_id)
+
+        def add_user_finish(self, container_id):
+            gotten = self._finished_user_set.get(container_id,0)
+            if gotten==0:
+                self._finished_user_count += 1
+            self._finished_user_set[container_id] = gotten + 1
+
+        def add_page_action(self, container_id, page_id):
+            key = '{c}-{p}'.format(c=container_id, p=page_id)
+            gotten = self._action_page_set.get(key,0)
+            if gotten==0:
+                self._action_page_count += 1
+            self._action_page_set[key] = gotten + 1
+
+        def add_page_success(self, container_id, page_id):
+            key = '{c}-{p}'.format(c=container_id, p=page_id)
+            gotten = self._success_page_set.get(key,0)
+            if gotten==0:
+                self._success_page_count += 1
+            self._success_page_set[key] = gotten + 1
+
+        def add_exec_time(self,time_sec):
+            self._exec_time_list.append(time_sec)
+
+        def anz_res(self):
+            ret = ""
+            ret += "The user status is {a} / {b} / {c}\n".format(
+                a = self._success_user_count,
+                b = self._finished_user_count,
+                c = self._total_user_num
+            )
+
+            bar_size = 30
+            valid_size = int((self._finished_user_count/self._total_user_num)*bar_size)
+            valid_size = valid_size if valid_size<=bar_size else bar_size
+            invalid_size = bar_size-valid_size
+            tmpstr = '◆'*valid_size + '-'*invalid_size
+            ret += tmpstr + '\n'
+
+            ret += "user success ratio: {p}\n".format(
+                p = self._success_user_count/self._finished_user_count if self._finished_user_count>0 else 0)
+            ret += "The page status is {a} / {b}\n".format(
+                a = self._success_page_count,
+                b = self._action_page_count
+            )
+            ret += "page success ratio: {p}\n".format(
+                p = str(self._success_page_count/self._action_page_count)[:5]
+            )
+            ret += "this task lasted for {t} secs".format(
+                t = int (time.time() - self._mission_start_time))
+            return ret
 
 class AsyConnector():
     def __init__(self, proxy_pool, if_proxy=True):
@@ -604,78 +824,42 @@ class PrintManager():
         ret += self.gen_center_str(timeline,len,frame=frame)
         return ret+self.gen_block(content,len,frame=frame)
 
-class exec_status():
-    def __init__(self):
-        self._mission_start_time        = time.time()
-        self._mission_end_time          = None
-        self._total_user_num            = None
-        self._action_user_set           = {}
-        self._finished_user_set         = {}
-        self._action_page_set           = {}
-        self._success_page_set          = {}
-        self._exec_time_list            = []
 
-        self._action_user_count         = 0
-        self._finished_user_count       = 0
-        self._action_page_count         = 0
-        self._success_page_count        = 0
 
-    def set_total_user_num(self,total_user_num):
-        self._total_user_num = total_user_num
-
-    def add_user_action(self, container_id):
-        gotten = self._action_user_set.get(container_id,0)
-        if gotten==0:
-            self._action_user_count += 1
-        self._action_user_set[container_id] = gotten + 1
-
-    def add_user_success(self, container_id):
-        gotten = self._finished_user_set.get(container_id,0)
-        if gotten==0:
-            self._finished_user_count += 1
-        self._finished_user_set[container_id] = gotten + 1
-
-    def add_page_action(self, container_id, page_id):
-        key = '{c}-{p}'.format(c=container_id, p=page_id)
-        gotten = self._action_page_set.get(key,0)
-        if gotten==0:
-            self._action_page_count += 1
-        self._action_page_set[key] = gotten + 1
-
-    def add_page_success(self, container_id, page_id):
-        key = '{c}-{p}'.format(c=container_id, p=page_id)
-        gotten = self._success_page_set.get(key,0)
-        if gotten==0:
-            self._success_page_count += 1
-        self._success_page_set[key] = gotten + 1
-
-    def add_exec_time(self,time_sec):
-        self._exec_time_list.append(time_sec)
-
-    def anz_res(self):
-        ret = ""
-        ret += "The user status is {a} / {b} / {c}\n".format(
-            a = self._finished_user_count,
-            b = self._action_user_count,
-            c = self._total_user_num
+class upload_history(upload_list):
+    def __init__(self,data,url,pack_len,thread_num,container_id):
+        self.container_id=container_id
+        setting=dict(
+            batch_size=pack_len,
+            thread_adjust=False,
+            thread_num=thread_num
         )
-        ret += "user success ratio: {p}\n".format(
-            p = self._finished_user_count/self._action_user_count)
-        ret += "The page status is {a} / {b}\n".format(
-            a = self._success_page_count,
-            b = self._action_page_count
-        )
-        ret += "page success ratio: {p}\n".format(
-            p = str(self._success_page_count/self._action_page_count)[:5]
-        )
-        ret += "this task lasted for {t} secs".format(
-            t = int (time.time() - self._mission_start_time))
-        return ret
+        upload_list.__init__(self,data,url,setting)
 
+    def pack_block(self,main_data,pack_id,pack_num):
+        data={
+            'data':          main_data,
+            'current_id':   pack_id,
+            'total_num':    pack_num,
+            'len':           main_data.__len__(),
+            'container_id':self.container_id
+        }
+        data=parse.urlencode(data).encode('utf8')
+        return data
 
 if __name__=='__main__':
     p_pool = []
-    # uuid = int(input('client id : '))
     uuid = 4
-    clientAsy(uuid=100)
+    for i in range(2):
+        p = Process(target=clientAsy,args=(uuid,))
+        p_pool.append(p)
+    for p in p_pool:
+        p.start()
+    while True:
+        for i in range(p_pool.__len__()):
+            if not p_pool[i].is_alive():
+                p_pool[i] = Process(target=clientAsy,args=(uuid,))
+                x=random.randint(1,10)
+                time.sleep(x)
+                p_pool[i].start()
 

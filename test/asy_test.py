@@ -1,6 +1,7 @@
 
 import asyncio
 import aiohttp
+import threading
 
 @asyncio.coroutine
 async def asy_test(url, id, proxy_used=0):
@@ -38,10 +39,9 @@ async def singleConn(url,id,times=0):
                 raise RuntimeError('{i} This proxy cannot connect , swith another'.format(i=id))
 
 
-
-
-loop = asyncio.get_event_loop()
 url = 'http://127.0.0.1:8080/test'
-tasks = [asy_test(url,i) for i in range(10)]
+tasks = [singleConn(url,i) for i in range(5)]
+loop = asyncio.get_event_loop()
 loop.run_until_complete(asyncio.wait(tasks))
 loop.close()
+
