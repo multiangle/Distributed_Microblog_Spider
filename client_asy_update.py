@@ -286,6 +286,7 @@ class AsyUpdateHistory():
         if config.NOMAL_INFO_PRINT:
             cids = [x['container_id'] for x in task_dict_list]
             print(cids)
+            self.exec_res.set_container_ids(cids)
 
         # 对获取网页结果的监督进程，可以定时报告任务进度
         self.exec_res.set_total_user_num(task_dict_list.__len__())
@@ -462,25 +463,42 @@ class AsyUpdateHistory():
         page = 1
         # this func exec the normal seq, and there will be another func to deal with unsuccess page
         continue_err_page_count = 0
+        batch = 1 # 每批获取页面的个数
+
+        ave_time_per_page = None
         while True:
             if continue_err_page_count>5:
                 print('warning: the continue_err_page_count come up to 5, up to {p}, finish {c} task'
                       .format(c=container_id,p=page))
                 self.exec_res.add_user_finish(container_id)
                 break
+            # for i in range(batch):
             try:
                 url = self.url_model.format(cid=container_id,page=page)
+                if self.exec_res.unfinished_size()<10:
+                    # print(self.exec_res.report_unfinished_tasks())
+                    print('user execution report: '+self.exec_res.get_action_times(container_id))
 
-                self.exec_res.add_user_action(container_id)
+                self.exec_res.add_user_action(container_id)         # 对运行结果进行监控
                 self.exec_res.add_page_action(container_id,page)
                 time_start = time.time()
 
                 res = await self.getPageContent(url,proxy_limit,reconn_limit,timeout=timeout)
                 continue_err_page_count = 0
 
-                self.exec_res.add_page_success(container_id,page)
+                self.exec_res.add_page_success(container_id,page)   # 对运行结果进行监控
                 time_end = time.time()
                 self.exec_res.add_exec_time(time_end-time_start)
+
+                if page>=5 and not ave_time_per_page:       # 经过前5页以后，开始估计要多少同步获取才能够在5页内完成
+                    target_gaps =  min((time.time() - latest_blog + 86400*10), 86400*80)
+                    current_gap = time.time()-res[-1]['created_timestamp']
+                    ave_gap_per_page = current_gap/page
+                    target_gaps -= current_gap
+                    if target_gaps>0:
+                        tmp = int(target_gaps/(ave_gap_per_page*5))
+                        if tmp>1:
+                            batch = tmp
 
                 valid_res = self.pick_out_valid_res(res,latest_blog,update_time)
                 ret_content += valid_res
@@ -569,10 +587,13 @@ class AsyUpdateHistory():
 
         def run(self):
             while self.msg_queue.__len__()==0:
-                time.sleep(5)
+                time.sleep(10)
                 if self.msg_queue.__len__()==0:
                     info_manager(self.pm.gen_block_with_time(self.exec_status.anz_res()),
                                  type="KEY",with_time=False)
+                # if self.exec_status.unfinished_size()<5:
+                #     print(self.exec_status.report_unfinished_tasks())
+
 
     class exec_status():
         def __init__(self):
@@ -592,8 +613,15 @@ class AsyUpdateHistory():
             self._action_page_count         = 0
             self._success_page_count        = 0
 
+            self._container_ids             = []
+            self._unfinished_ids            = []
+
         def set_total_user_num(self,total_user_num):
             self._total_user_num = total_user_num
+
+        def set_container_ids(self,ids):
+            self._container_ids[:] = ids[:]
+            self._unfinished_ids[:] = ids[:]
 
         def add_user_action(self, container_id):
             gotten = self._action_user_set.get(container_id,0)
@@ -613,6 +641,7 @@ class AsyUpdateHistory():
             if gotten==0:
                 self._finished_user_count += 1
             self._finished_user_set[container_id] = gotten + 1
+            self._unfinished_ids.pop(self._unfinished_ids.index(container_id))
 
         def add_page_action(self, container_id, page_id):
             key = '{c}-{p}'.format(c=container_id, p=page_id)
@@ -659,6 +688,22 @@ class AsyUpdateHistory():
                 t = int (time.time() - self._mission_start_time))
             return ret
 
+        def report_unfinished_tasks(self):
+            ret = ''
+            for id in self._unfinished_ids:
+                tmp = 'id:{i}\taction pages:{p}'.format(i=id,p=self._action_user_set[id])
+                ret += tmp + '\n'
+            return ret[:-1]
+
+        def unfinished_size(self):
+            return self._total_user_num-self._finished_user_count
+
+        def get_action_times(self,container_id):
+            return self._action_user_set[container_id]
+
+        def tmp(self):
+            return self._action_user_set
+
 class AsyConnector():
     def __init__(self, proxy_pool, if_proxy=True):
         self.proxy_pool = proxy_pool
@@ -676,18 +721,20 @@ class AsyConnector():
                              "unable to get proxy, sleep for 3 sec",type="NORMAL")
                 await asyncio.sleep(3)
         try:
-            page = await self.__single_connect(url,
-                                               proxy,
-                                               reconn_limit,
-                                               timeout=timeout)
-            print("success to get page after try {t} proxies"
-                  .format(t=proxy_used))
+            ret_data = await self.__single_connect(url,
+                                                   proxy,
+                                                   reconn_limit,
+                                                   timeout=timeout)
+            reconn_times    = ret_data['reconn_times']
+            page            = ret_data['content']
+            print("success to get page {u} \n\t\tafter try {p} proxies and {r} reconn"
+                  .format(u=url,p=proxy_used,r=reconn_times))
             return page
         except Exception as e:
-            print("Error from AsyConnector.getPage : reason:\n{e}"
-                  .format(e=e))
+            print("Error from AsyConnector.getPage {u}\n\t\treason:{e}"
+                  .format(e=e,u=url))
             if proxy_used < proxy_limit:
-                print('this proxy seems invalid, ready to change one, '
+                print('\t\tthis proxy seems invalid, ready to change one, '
                       'the {i}th proxy'.format(i=proxy_used+1))
                 return await self.getPage(url,
                                           proxy_limit,
@@ -710,12 +757,16 @@ class AsyConnector():
                 async with session.get(url, headers=headers) as resp:
                     content = await resp.read()
                     content = content.decode('utf8')
-                print("success to get page after reconn {t} times".format(t=reconn_times))
-                return content
+                # print("success to get page after reconn {t} times".format(t=reconn_times))
+                ret_data = dict(
+                    content = content,
+                    reconn_times = reconn_times
+                )
+                return ret_data
             except Exception as e:
-                print("Error from AsyConnector.__single_connect: \nreason :{x}".format(x=e))
+                print("Error from AsyConnector.__single_connect: \n\t\treason :{x}".format(x=e))
                 if reconn_times < reconn_limit:
-                    print("reconn again, the {i} times".format(i=reconn_times+1))
+                    print("\t\treconn again, the {i} times".format(i=reconn_times+1))
                     return await self.__single_connect(url, proxy, reconn_limit,
                                                        reconn_times+1, timeout=timeout)
                 else:
@@ -848,7 +899,7 @@ class upload_history(upload_list):
 
 if __name__=='__main__':
     p_pool = []
-    uuid = 4
+    uuid = 100
     for i in range(1):
         p = Process(target=clientAsy,args=(uuid,))
         p_pool.append(p)
