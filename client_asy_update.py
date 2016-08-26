@@ -289,7 +289,8 @@ class AsyUpdateHistory():
 
         # 对获取网页结果的监督进程，可以定时报告任务进度
         self.exec_res.set_total_user_num(task_dict_list.__len__())
-        exec_supervisor_thread = self.exec_supervisor(self.exec_res, self.pm)
+        exec_super_msgqueue = []
+        exec_supervisor_thread = self.exec_supervisor(self.exec_res, self.pm, exec_super_msgqueue)
         exec_supervisor_thread.start()
 
         # 打包分发任务，获取页面数据
@@ -312,6 +313,8 @@ class AsyUpdateHistory():
                                                  "USE {t} SECONDS".format(t=t1-t0)),
                      type='KEY',with_time=False)
 
+        exec_super_msgqueue.append('hehe')
+
         undealed_tasks = [self.asyUpdateHistory_undealed(x,ret_content,timeout=10)
                           for x in page_undealed]
         loop.run_until_complete(asyncio.wait(undealed_tasks))
@@ -322,7 +325,6 @@ class AsyUpdateHistory():
                                                  "THIS TASK USE {t} SECONDS\n"
                                                  "TOTAL {t2} SECONDS").format(t=t2-t1,t2=t2-t0),
                      type='KEY',with_time=False)
-        exec_supervisor_thread.stop()
 
         # 页面获取完毕，开始去除重复元素
         contents = ret_content
@@ -462,8 +464,8 @@ class AsyUpdateHistory():
         continue_err_page_count = 0
         while True:
             if continue_err_page_count>5:
-                print('warning: the continue_err_page_count come up to 5, finish {c} task'
-                      .format(c=container_id))
+                print('warning: the continue_err_page_count come up to 5, up to {p}, finish {c} task'
+                      .format(c=container_id,p=page))
                 self.exec_res.add_user_finish(container_id)
                 break
             try:
@@ -490,8 +492,8 @@ class AsyUpdateHistory():
                     break
             except:
                 continue_err_page_count += 1
-                print('{i} continue_err_page_count : {c}'
-                      .format(c=continue_err_page_count,i=container_id))
+                print('{i} continue_err_page_count : {c}, current page: {p}'
+                      .format(c=continue_err_page_count,i=container_id,p=page))
                 undealed_task = dict(
                     container_id    = container_id,
                     page_id         = page,
@@ -518,7 +520,7 @@ class AsyUpdateHistory():
                                       )
             valid_res = self.pick_out_valid_res(res,task['latest_blog'],task['update_time'])
             ret_content += valid_res
-            print(' Success {cid}-page {i} is done'.format(cid=container_id,i=page_id))
+            print(' UNDEALED: Success {cid}-page {i} is done'.format(cid=container_id,i=page_id))
         except:
             if task['retry_left'] > 0:
                 task['retry_left'] -= 1
@@ -559,21 +561,18 @@ class AsyUpdateHistory():
         return valid_res
 
     class exec_supervisor(threading.Thread):
-        def __init__(self, exec_status, print_manager):
+        def __init__(self, exec_status, print_manager, msg_queue):
             threading.Thread.__init__(self)
             self.exec_status = exec_status
             self.pm = print_manager
-            self.go = True
+            self.msg_queue = msg_queue
 
         def run(self):
-            while self.go:
+            while self.msg_queue.__len__()==0:
                 time.sleep(5)
-                if self.go:
+                if self.msg_queue.__len__()==0:
                     info_manager(self.pm.gen_block_with_time(self.exec_status.anz_res()),
                                  type="KEY",with_time=False)
-
-        def stop(self):
-            self.go = False
 
     class exec_status():
         def __init__(self):
@@ -674,7 +673,7 @@ class AsyConnector():
                 break
             else:
                 info_manager("AsyConnector.getPage.getproxy->"
-                             "unable to get proxy, sleep for 3 sec")
+                             "unable to get proxy, sleep for 3 sec",type="NORMAL")
                 await asyncio.sleep(3)
         try:
             page = await self.__single_connect(url,
@@ -850,16 +849,16 @@ class upload_history(upload_list):
 if __name__=='__main__':
     p_pool = []
     uuid = 4
-    for i in range(2):
+    for i in range(1):
         p = Process(target=clientAsy,args=(uuid,))
         p_pool.append(p)
     for p in p_pool:
         p.start()
-    while True:
-        for i in range(p_pool.__len__()):
-            if not p_pool[i].is_alive():
-                p_pool[i] = Process(target=clientAsy,args=(uuid,))
-                x=random.randint(1,10)
-                time.sleep(x)
-                p_pool[i].start()
+    # while True:
+    #     for i in range(p_pool.__len__()):
+    #         if not p_pool[i].is_alive():
+    #             p_pool[i] = Process(target=clientAsy,args=(uuid,))
+    #             x=random.randint(1,10)
+    #             time.sleep(x)
+    #             p_pool[i].start()
 
