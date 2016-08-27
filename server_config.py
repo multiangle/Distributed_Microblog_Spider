@@ -1,11 +1,10 @@
 __author__ = 'multiangle'
 
 #=======    USED IN server_proxy.py    ====================================
-GET_PROXY_URL                   ='http://vxer.daili666api.com/ip/?tid=559' \
-                                '842334303001&num={NUM}&operator=1&category=2&foreign=none'
+import key_config
+GET_PROXY_URL                   = key_config.GET_PROXY_URL
 PROXY_POOL_SIZE                 =600
 VERIFY_PROXY_THREAD_NUM         =300
-PROXY_PATH                      ='proxy\\'         # the folder path where raw and checked proxy is stored
 PROXY_NORMAL_INFO_PRINT         =True
 MAX_VALID_PROXY_THREAD_NUM      =3
 PROXY_MONITOR_GAP               =10        # （seconds） every 10 seconds, a process will note the state

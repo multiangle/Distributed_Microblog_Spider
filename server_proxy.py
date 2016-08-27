@@ -24,7 +24,7 @@ import urllib.request as request
 import random
 
 # import from this folder
-from server_config import GET_PROXY_URL,PROXY_POOL_SIZE,PROXY_PATH     #about proxy
+from server_config import GET_PROXY_URL,PROXY_POOL_SIZE     #about proxy
 from server_config import VERIFY_PROXY_THREAD_NUM,MAX_VALID_PROXY_THREAD_NUM
 import server_config
 import File_Interface as FI

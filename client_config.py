@@ -6,6 +6,7 @@ __author__ = 'multiangle'
 #    This file contains the option info for client.
 #
 #========================================================
+import key_config
 
 # 全局参数              global config info
 PROCESS_NUM             =2                #进程数目           number of process
@@ -26,10 +27,7 @@ LARGEST_TRY_TIMES       =3                # 获取页面或解析失败以后，
 
 ####-------------------------------------####
 
-# SERVER_URL='http://server:port' #服务器地址,端口号
-# DATA_SERVER_URL='http://data_server:port'    #数据服务器地址，端口号
-
-SERVER_URL='http://127.0.0.1:8000' #服务器地址,端口号
-DATA_SERVER_URL='http://127.0.0.1:8001'    #数据服务器地址，端口号
+SERVER_URL              = key_config.SERVER_URL         #服务器地址,端口号
+DATA_SERVER_URL         = key_config.DATA_SERVER_URL    #数据服务器地址，端口号
 
 

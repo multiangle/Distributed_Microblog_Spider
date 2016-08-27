@@ -24,6 +24,7 @@ from random import Random
 import math
 import aiohttp
 import asyncio
+import traceback
 
 # import from this folder
 import client_config as config
@@ -260,7 +261,6 @@ class AsyUpdateHistory():
         self.task = task
         self.proxy_pool = proxy_pool
         self.finished_user = []
-        self.exec_res = self.exec_status()
         self.pm = PrintManager()
 
     def run(self):
@@ -283,12 +283,13 @@ class AsyUpdateHistory():
             ret['retry_left']       = 1  # 最多重新尝试次数
             return ret
         task_dict_list = [trans_task_dict(x) for x in ori_task_list]
+
+        # 对获取网页结果的监督进程，可以定时报告任务进度
+        self.exec_res = self.exec_status()
         if config.NOMAL_INFO_PRINT:
             cids = [x['container_id'] for x in task_dict_list]
             print(cids)
             self.exec_res.set_container_ids(cids)
-
-        # 对获取网页结果的监督进程，可以定时报告任务进度
         self.exec_res.set_total_user_num(task_dict_list.__len__())
         exec_super_msgqueue = []
         exec_supervisor_thread = self.exec_supervisor(self.exec_res, self.pm, exec_super_msgqueue)
@@ -316,10 +317,17 @@ class AsyUpdateHistory():
 
         exec_super_msgqueue.append('hehe')
 
+        # 打包任务，获取之前获取失败的页面
+        self.exec_undealed_status = self.exec_undealed_status()
+        exec_undealed_msgqueue = []
+        exec_undealed_thread = self.exec_undealed_supervisor(exec_undealed_msgqueue,
+                                                             self.exec_undealed_status)
+        exec_undealed_thread.start()
         undealed_tasks = [self.asyUpdateHistory_undealed(x,ret_content,timeout=10)
                           for x in page_undealed]
         loop.run_until_complete(asyncio.wait(undealed_tasks))
         loop.close()
+        exec_undealed_msgqueue.append('hehe')
 
         t2 = int(time.time())
         info_manager(self.pm.gen_block_with_time("TASK OF UNDEALED USER IS FINISHED\n"
@@ -444,8 +452,6 @@ class AsyUpdateHistory():
             # raise ConnectionError('Unable to return proxy')
             return
 
-
-
     @asyncio.coroutine
     async def asyUpdateHistory_user(self, task_dict, ret_content, page_undealed_list, timeout=10):
 
@@ -461,11 +467,12 @@ class AsyUpdateHistory():
         aconn = AsyConnector(self.proxy_pool)
 
         page = 1
+        batch = 1 # 每批获取页面的个数
+        ave_time_per_page = None
+
         # this func exec the normal seq, and there will be another func to deal with unsuccess page
         continue_err_page_count = 0
-        batch = 1 # 每批获取页面的个数
 
-        ave_time_per_page = None
         while True:
             if continue_err_page_count>5:
                 print('warning: the continue_err_page_count come up to 5, up to {p}, finish {c} task'
@@ -477,7 +484,8 @@ class AsyUpdateHistory():
                 url = self.url_model.format(cid=container_id,page=page)
                 if self.exec_res.unfinished_size()<10:
                     # print(self.exec_res.report_unfinished_tasks())
-                    print('user execution report: '+self.exec_res.get_action_times(container_id))
+                    print('user execution report: user: {i} | current page: {p}| action: {a}'
+                          .format(i=container_id,a=self.exec_res.get_action_times(container_id),p=page))
 
                 self.exec_res.add_user_action(container_id)         # 对运行结果进行监控
                 self.exec_res.add_page_action(container_id,page)
@@ -490,15 +498,15 @@ class AsyUpdateHistory():
                 time_end = time.time()
                 self.exec_res.add_exec_time(time_end-time_start)
 
-                if page>=5 and not ave_time_per_page:       # 经过前5页以后，开始估计要多少同步获取才能够在5页内完成
-                    target_gaps =  min((time.time() - latest_blog + 86400*10), 86400*80)
-                    current_gap = time.time()-res[-1]['created_timestamp']
-                    ave_gap_per_page = current_gap/page
-                    target_gaps -= current_gap
-                    if target_gaps>0:
-                        tmp = int(target_gaps/(ave_gap_per_page*5))
-                        if tmp>1:
-                            batch = tmp
+                # if page>=5 and not ave_time_per_page:       # 经过前5页以后，开始估计要多少同步获取才能够在5页内完成
+                #     target_gaps =  min((time.time() - latest_blog + 86400*10), 86400*80)
+                #     current_gap = time.time()-res[-1]['created_timestamp']
+                #     ave_gap_per_page = current_gap/page
+                #     target_gaps -= current_gap
+                #     if target_gaps>0:
+                #         tmp = int(target_gaps/(ave_gap_per_page*5))
+                #         if tmp>1:
+                #             batch = tmp
 
                 valid_res = self.pick_out_valid_res(res,latest_blog,update_time)
                 ret_content += valid_res
@@ -508,10 +516,13 @@ class AsyUpdateHistory():
                     info_manager(info_str,type="NORMAL")
                     self.exec_res.add_user_success(container_id)
                     break
-            except:
+            except Exception as e:
                 continue_err_page_count += 1
-                print('{i} continue_err_page_count : {c}, current page: {p}'
-                      .format(c=continue_err_page_count,i=container_id,p=page))
+                print('Error: {i} continue_err_page_count : {c}, current page: {p}\n\t\treason: {e}'
+                      .format(c=continue_err_page_count,i=container_id,p=page,e=e))
+                # print('\t\treason: {e}'.format(e=e))
+                # traceback.print_exc()
+
                 undealed_task = dict(
                     container_id    = container_id,
                     page_id         = page,
@@ -524,59 +535,6 @@ class AsyUpdateHistory():
                 page_undealed_list.append(undealed_task)
 
             page += 1
-
-    @asyncio.coroutine
-    async def asyUpdateHistory_undealed(self,task,ret_content,timeout=10):
-        try:
-            page_id = task['page_id']
-            container_id = task['container_id']
-            url = self.url_model.format(cid=container_id,page=page_id)
-            res = await self.getPageContent(url,
-                                      task['proxy_limit'],
-                                      task['reconn_limit'],
-                                      timeout=timeout
-                                      )
-            valid_res = self.pick_out_valid_res(res,task['latest_blog'],task['update_time'])
-            ret_content += valid_res
-            print(' UNDEALED: Success {cid}-page {i} is done'.format(cid=container_id,i=page_id))
-        except:
-            if task['retry_left'] > 0:
-                task['retry_left'] -= 1
-                await self.asyUpdateHistory_undealed(task,ret_content,timeout=timeout)
-            else:
-                pass
-                print('sorry about that {c} {i}'.format(c=container_id,i=page_id))
-
-    @asyncio.coroutine
-    async def getPageContent(self, url, proxy_limit,
-                             reconn_limit, timeout=10):
-        aconn = AsyConnector(self.proxy_pool)
-
-        # get page
-        try:
-            page = await aconn.getPage(url,
-                                          proxy_limit,
-                                          reconn_limit,
-                                          timeout=timeout)
-        except Exception as e:
-            raise IOError("Unable to get page , url:{u}"
-                               .format(u=url))
-        # parse page
-        try:
-            pmp = parseMicroblogPage()
-            res = pmp.parse_blog_page(page)
-            return res
-        except Exception as e:
-            raise ValueError("Unable to parse page, page:\n{p}".format(p=page))
-
-    def pick_out_valid_res(self,init_res,latest_blog,update_time):
-        valid_res = []
-        for r in init_res:
-            if int(r['created_timestamp'])>int(latest_blog)-60*60*24*10 \
-                    and int(r['created_timestamp'])>time.time()-60*60*24*80:  # 追踪到最后一条微博的前10天，或者是最近的80天
-            # if int(r['created_timestamp'])>time.time()-60*60*24*80:
-                valid_res.append(r)
-        return valid_res
 
     class exec_supervisor(threading.Thread):
         def __init__(self, exec_status, print_manager, msg_queue):
@@ -591,9 +549,8 @@ class AsyUpdateHistory():
                 if self.msg_queue.__len__()==0:
                     info_manager(self.pm.gen_block_with_time(self.exec_status.anz_res()),
                                  type="KEY",with_time=False)
-                # if self.exec_status.unfinished_size()<5:
-                #     print(self.exec_status.report_unfinished_tasks())
-
+                if self.exec_status.unfinished_size()<5:
+                    print(self.exec_status.report_unfinished_tasks())
 
     class exec_status():
         def __init__(self):
@@ -704,12 +661,109 @@ class AsyUpdateHistory():
         def tmp(self):
             return self._action_user_set
 
+    @asyncio.coroutine
+    async def asyUpdateHistory_undealed(self,task,ret_content,timeout=10):
+        try:
+            page_id = task['page_id']
+            container_id = task['container_id']
+            self.exec_undealed_status.add_action_page(container_id, page_id)
+            url = self.url_model.format(cid=container_id,page=page_id)
+            res = await self.getPageContent(url,
+                                      task['proxy_limit'],
+                                      task['reconn_limit'],
+                                      timeout=timeout
+                                      )
+            valid_res = self.pick_out_valid_res(res,task['latest_blog'],task['update_time'])
+            ret_content += valid_res
+            print(' UNDEALED: Success {cid}-page {i} is done'.format(cid=container_id,i=page_id))
+            self.exec_undealed_status.add_success_page(container_id, page_id)
+        except:
+            if task['retry_left'] > 0:
+                task['retry_left'] -= 1
+                await self.asyUpdateHistory_undealed(task,ret_content,timeout=timeout)
+            else:
+                pass
+                print('sorry about that {c} {i}'.format(c=container_id,i=page_id))
+
+    class exec_undealed_status():
+        def __init__(self):
+            self.action_page_set       = {}
+            self.action_page_count     = 0
+            self.success_page_set      = {}
+            self.success_page_count    = 0
+
+        def add_action_page(self,container_id, page_id):
+            key = '{c}-{i}'.format(c=container_id,i=page_id)
+            tmp = self.action_page_set.get(key, 0)
+            if tmp==0:
+                self.action_page_count += 1
+            self.action_page_set[key] = tmp + 1
+
+        def add_success_page(self,container_id, page_id):
+            key = '{c}-{i}'.format(c=container_id,i=page_id)
+            tmp = self.success_page_set.get(key, 0)
+            if tmp==0:
+                self.success_page_count += 1
+            self.success_page_set[key] = tmp + 1
+
+    class exec_undealed_supervisor(threading.Thread):
+        def __init__(self, msg_queue, exec_status):
+            self.exec_status    = exec_status
+            self.msg_queue      = msg_queue
+            threading.Thread.__init__(self)
+
+        def run(self):
+            pm = PrintManager()
+            while self.msg_queue.__len__()==0:
+                time.sleep(10)
+                if self.msg_queue.__len__()==0:
+                    info_manager(
+                        pm.gen_block_with_time(
+                            "undealed execution status:\n"
+                            "{a} / {b}".format(a = self.exec_status.success_page_count,
+                                                     b = self.exec_status.action_page_count
+                                               )
+                        ),
+                        type = 'KEY',
+                        with_time = False
+                    )
+
+
+    async def getPageContent(self, url, proxy_limit,
+                             reconn_limit, timeout=10):
+        aconn = AsyConnector(self.proxy_pool)
+
+        # get page
+        try:
+            page = await aconn.getPage( url,
+                                        proxy_limit,
+                                        reconn_limit,
+                                        timeout=timeout)
+        except Exception as e:
+            raise IOError("Unable to get page , url:{u}"
+                               .format(u=url))
+        # parse page
+        try:
+            pmp = parseMicroblogPage()
+            res = pmp.parse_blog_page(page)
+            return res
+        except Exception as e:
+            raise ValueError("Unable to parse page, page:\n{p}".format(p=page))
+
+    def pick_out_valid_res(self,init_res,latest_blog,update_time):
+        valid_res = []
+        for r in init_res:
+            if int(r['created_timestamp'])>int(latest_blog)-60*60*24*10 \
+                    and int(r['created_timestamp'])>time.time()-60*60*24*80:  # 追踪到最后一条微博的前10天，或者是最近的80天
+            # if int(r['created_timestamp'])>time.time()-60*60*24*80:
+                valid_res.append(r)
+        return valid_res
+
 class AsyConnector():
     def __init__(self, proxy_pool, if_proxy=True):
         self.proxy_pool = proxy_pool
         self.if_proxy   = if_proxy
 
-    @asyncio.coroutine
     async def getPage(self, url, proxy_limit, reconn_limit,
                       proxy_used=0, timeout=10):
         while True:
@@ -745,7 +799,6 @@ class AsyConnector():
                 raise RuntimeError("** warning: can not get page, "
                                    "boooooooooooom")
 
-    @asyncio.coroutine
     async def __single_connect(self,url, proxy, reconn_limit,  # 处理单个proxy的任务
                                reconn_times=0, timeout=10):
         headers = {'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_0 like Mac OS X) '
