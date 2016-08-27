@@ -475,8 +475,8 @@ class AsyUpdateHistory():
 
         while True:
             if continue_err_page_count>5:
-                print('warning: the continue_err_page_count come up to 5, up to {p}, finish {c} task'
-                      .format(c=container_id,p=page))
+                info_manager('warning: the continue_err_page_count come up to 5, up to {p}, finish {c} task'
+                             .format(c=container_id,p=page))
                 self.exec_res.add_user_finish(container_id)
                 break
             # for i in range(batch):
@@ -484,8 +484,8 @@ class AsyUpdateHistory():
                 url = self.url_model.format(cid=container_id,page=page)
                 if self.exec_res.unfinished_size()>0:
                     # print(self.exec_res.report_unfinished_tasks())
-                    print('user execution report: user: {i} | current page: {p} | pre actions num: {a}'
-                          .format(i=container_id,a=self.exec_res.get_action_times(container_id),p=page))
+                    info_manager('user execution report: user: {i} | current page: {p} | pre actions num: {a}'
+                                 .format(i=container_id,a=self.exec_res.get_action_times(container_id),p=page))
 
                 self.exec_res.add_user_action(container_id)         # 对运行结果进行监控
                 self.exec_res.add_page_action(container_id,page)
@@ -518,8 +518,8 @@ class AsyUpdateHistory():
                     break
             except Exception as e:
                 continue_err_page_count += 1
-                print('Error: {i} continue_err_page_count : {c}, current page: {p}\n\t\treason: {e}'
-                      .format(c=continue_err_page_count,i=container_id,p=page,e=e))
+                info_manager('Error: {i} continue_err_page_count : {c}, current page: {p}\n\t\treason: {e}'
+                             .format(c=continue_err_page_count,i=container_id,p=page,e=e))
                 # print('\t\treason: {e}'.format(e=e))
                 # traceback.print_exc()
 
@@ -598,7 +598,8 @@ class AsyUpdateHistory():
             if gotten==0:
                 self._finished_user_count += 1
             self._finished_user_set[container_id] = gotten + 1
-            self._unfinished_ids.pop(self._unfinished_ids.index(container_id))
+            if container_id in self._unfinished_ids:
+                self._unfinished_ids.pop(self._unfinished_ids.index(container_id))
 
         def add_page_action(self, container_id, page_id):
             key = '{c}-{p}'.format(c=container_id, p=page_id)
@@ -675,7 +676,7 @@ class AsyUpdateHistory():
                                       )
             valid_res = self.pick_out_valid_res(res,task['latest_blog'],task['update_time'])
             ret_content += valid_res
-            print(' UNDEALED: Success {cid}-page {i} is done'.format(cid=container_id,i=page_id))
+            info_manager(' UNDEALED: Success {cid}-page {i} is done'.format(cid=container_id,i=page_id))
             self.exec_undealed_status.add_success_page(container_id, page_id)
         except:
             if task['retry_left'] > 0:
@@ -793,15 +794,15 @@ class AsyConnector():
                                                    timeout=timeout)
             reconn_times    = ret_data['reconn_times']
             page            = ret_data['content']
-            print("success to get page {u} \n\t\tafter try {p} proxies and {r} reconn"
-                  .format(u=url,p=proxy_used,r=reconn_times))
+            info_manager("success to get page {u} \n\t\tafter try {p} proxies and {r} reconn"
+                         .format(u=url,p=proxy_used,r=reconn_times))
             return page
         except Exception as e:
-            print("Error from AsyConnector.getPage {u}\n\t\treason:{e}"
-                  .format(e=e,u=url))
+            info_manager("Error from AsyConnector.getPage {u}\n\t\treason:{e}"
+                         .format(e=e,u=url))
             if proxy_used < proxy_limit:
-                print('\t\tthis proxy seems invalid, ready to change one, '
-                      'the {i}th proxy'.format(i=proxy_used+1))
+                info_manager('\t\tthis proxy seems invalid, ready to change one, '
+                             'the {i}th proxy'.format(i=proxy_used+1))
                 return await self.getPage(url,
                                           proxy_limit,
                                           reconn_limit,
@@ -830,9 +831,9 @@ class AsyConnector():
                     )
                     return ret_data
             except Exception as e:
-                print("Error from AsyConnector.__single_connect: \n\t\treason :{x}".format(x=e))
+                info_manager("Error from AsyConnector.__single_connect: \n\t\treason :{x}".format(x=e))
                 if reconn_times < reconn_limit:
-                    print("\t\treconn again, the {i} times".format(i=reconn_times+1))
+                    info_manager("\t\treconn again, the {i} times".format(i=reconn_times+1))
                     return await self.__single_connect(url, proxy, reconn_limit,
                                                        reconn_times+1, timeout=timeout)
                 else:
@@ -965,17 +966,17 @@ class upload_history(upload_list):
 
 if __name__=='__main__':
     p_pool = []
-    uuid = 4
-    for i in range(1):
+    uuid = 5
+    for i in range(3):
         p = Process(target=clientAsy,args=(uuid,))
         p_pool.append(p)
     for p in p_pool:
         p.start()
-    # while True:
-    #     for i in range(p_pool.__len__()):
-    #         if not p_pool[i].is_alive():
-    #             p_pool[i] = Process(target=clientAsy,args=(uuid,))
-    #             x=random.randint(1,10)
-    #             time.sleep(x)
-    #             p_pool[i].start()
+    while True:
+        for i in range(p_pool.__len__()):
+            if not p_pool[i].is_alive():
+                p_pool[i] = Process(target=clientAsy,args=(uuid,))
+                x=random.randint(1,10)
+                time.sleep(x)
+                p_pool[i].start()
 

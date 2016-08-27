@@ -176,7 +176,10 @@ class check_proxy(threading.Thread):
             if not self.raw_proxy:      # if raw_proxy is empty ,end this threading
                 break
             self.raw_proxy_lock.acquire()
-            current_raw_proxy=self.raw_proxy.pop(0)
+            try:
+                current_raw_proxy=self.raw_proxy.pop(0)
+            except:
+                break
             self.raw_proxy_lock.release()
 
             handler=request.ProxyHandler({'http':'http://%s'%(current_raw_proxy)})
