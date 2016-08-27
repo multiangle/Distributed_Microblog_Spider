@@ -169,12 +169,14 @@ class TaskHandler(tornado.web.RequestHandler):
                 .format(t_time=time_stick,cid=container_id)
             dbi.update_asQuery(query)
 
-        if task_id==4 or task_id==100:   # this part is in test
+        if task_id==4 or task_id==5 or task_id==100:   # this part is in test
             dbi=MySQL_Interface()
             current_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
             target_time_stick=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()-60*60*24*1)) #提早5天
             if task_id==4:
                 batch_size = 100
+            elif task_id==5:
+                batch_size = 200
             else:
                 batch_size = 10
             query='select container_id,update_time,latest_blog from user_info_table ' \
@@ -234,7 +236,8 @@ class TaskHandler(tornado.web.RequestHandler):
         t_2=['2']         # get history weibo , get counter which blog_num<=15000 ,connect with server through www
         t_3=['3']         # get history weibo , get counter which blog_num>15000 ,connect with server through localhost
         t_4=['4']         # update weibo
-        t_5=['100']
+        t_5=['5']
+        t_6=['100']
         if uuid in t_1:
             return 1
         elif uuid in t_2:
@@ -244,6 +247,8 @@ class TaskHandler(tornado.web.RequestHandler):
         elif uuid in t_4:
             return 4
         elif uuid in t_5:
+            return 5
+        elif uuid in t_6:
             return 100
         else:
             return -1

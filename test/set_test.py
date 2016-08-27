@@ -1,5 +1,10 @@
 import time
 
-a = time.time()
-t=int(time.time()-a)
-print(t)
+count = 0
+try:
+    count += 1
+    raise ValueError("klajsdf")
+    count += 1
+except:
+    pass
+print(count)

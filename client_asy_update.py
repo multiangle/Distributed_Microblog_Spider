@@ -482,9 +482,9 @@ class AsyUpdateHistory():
             # for i in range(batch):
             try:
                 url = self.url_model.format(cid=container_id,page=page)
-                if self.exec_res.unfinished_size()<10:
+                if self.exec_res.unfinished_size()>0:
                     # print(self.exec_res.report_unfinished_tasks())
-                    print('user execution report: user: {i} | current page: {p}| action: {a}'
+                    print('user execution report: user: {i} | current page: {p} | pre actions num: {a}'
                           .format(i=container_id,a=self.exec_res.get_action_times(container_id),p=page))
 
                 self.exec_res.add_user_action(container_id)         # 对运行结果进行监控
@@ -629,7 +629,7 @@ class AsyUpdateHistory():
             valid_size = int((self._finished_user_count/self._total_user_num)*bar_size)
             valid_size = valid_size if valid_size<=bar_size else bar_size
             invalid_size = bar_size-valid_size
-            tmpstr = '◆'*valid_size + '-'*invalid_size
+            tmpstr = '■'*valid_size + '□'*invalid_size
             ret += tmpstr + '\n'
 
             ret += "user success ratio: {p}\n".format(
@@ -656,7 +656,7 @@ class AsyUpdateHistory():
             return self._total_user_num-self._finished_user_count
 
         def get_action_times(self,container_id):
-            return self._action_user_set[container_id]
+            return self._action_user_set.get(container_id,0)
 
         def tmp(self):
             return self._action_user_set
@@ -680,9 +680,11 @@ class AsyUpdateHistory():
         except:
             if task['retry_left'] > 0:
                 task['retry_left'] -= 1
+                info_manager("unable to get page {c}-{i} | left time {l}"
+                             .format(c=task['container_id'],i=task['page_id'],l=task['retry_left']))
                 await self.asyUpdateHistory_undealed(task,ret_content,timeout=timeout)
             else:
-                pass
+                self.exec_undealed_status.add_finished_page(container_id, page_id)
                 print('sorry about that {c} {i}'.format(c=container_id,i=page_id))
 
     class exec_undealed_status():
@@ -691,6 +693,9 @@ class AsyUpdateHistory():
             self.action_page_count     = 0
             self.success_page_set      = {}
             self.success_page_count    = 0
+            self.finished_page_set     = {}
+            self.finished_page_count   = 0
+
 
         def add_action_page(self,container_id, page_id):
             key = '{c}-{i}'.format(c=container_id,i=page_id)
@@ -705,6 +710,14 @@ class AsyUpdateHistory():
             if tmp==0:
                 self.success_page_count += 1
             self.success_page_set[key] = tmp + 1
+            self.add_finished_page(container_id, page_id)
+
+        def add_finished_page(self,container_id, page_id):
+            key = '{c}-{i}'.format(c=container_id,i=page_id)
+            tmp = self.finished_page_set.get(key,0)
+            if tmp==0:
+                self.finished_page_count += 1
+            self.finished_page_set[key] = tmp + 1
 
     class exec_undealed_supervisor(threading.Thread):
         def __init__(self, msg_queue, exec_status):
@@ -720,8 +733,9 @@ class AsyUpdateHistory():
                     info_manager(
                         pm.gen_block_with_time(
                             "undealed execution status:\n"
-                            "{a} / {b}".format(a = self.exec_status.success_page_count,
-                                                     b = self.exec_status.action_page_count
+                            "{a} / {b} / {c}".format(a = self.exec_status.success_page_count,
+                                                     b = self.exec_status.finished_page_count,
+                                                     c = self.exec_status.action_page_count
                                                )
                         ),
                         type = 'KEY',
@@ -735,10 +749,8 @@ class AsyUpdateHistory():
 
         # get page
         try:
-            page = await aconn.getPage( url,
-                                        proxy_limit,
-                                        reconn_limit,
-                                        timeout=timeout)
+            page = await aconn.getPage( url,proxy_limit,
+                                        reconn_limit,timeout=timeout)
         except Exception as e:
             raise IOError("Unable to get page , url:{u}"
                                .format(u=url))
@@ -748,7 +760,7 @@ class AsyUpdateHistory():
             res = pmp.parse_blog_page(page)
             return res
         except Exception as e:
-            raise ValueError("Unable to parse page, page:\n{p}".format(p=page))
+            raise ValueError("Unable to parse page, url: {u}, \n\t\tpage content:{p}".format(p=page,u=url))
 
     def pick_out_valid_res(self,init_res,latest_blog,update_time):
         valid_res = []
@@ -807,15 +819,16 @@ class AsyConnector():
         conn = aiohttp.ProxyConnector(proxy=proxy, conn_timeout=timeout)
         async with aiohttp.ClientSession(connector=conn) as session:
             try:
-                async with session.get(url, headers=headers) as resp:
-                    content = await resp.read()
-                    content = content.decode('utf8')
-                # print("success to get page after reconn {t} times".format(t=reconn_times))
-                ret_data = dict(
-                    content = content,
-                    reconn_times = reconn_times
-                )
-                return ret_data
+                with aiohttp.Timeout(timeout+1):
+                    async with session.get(url, headers=headers) as resp:
+                        content = await resp.read()
+                        content = content.decode('utf8')
+                    # print("success to get page after reconn {t} times".format(t=reconn_times))
+                    ret_data = dict(
+                        content = content,
+                        reconn_times = reconn_times
+                    )
+                    return ret_data
             except Exception as e:
                 print("Error from AsyConnector.__single_connect: \n\t\treason :{x}".format(x=e))
                 if reconn_times < reconn_limit:
@@ -952,7 +965,7 @@ class upload_history(upload_list):
 
 if __name__=='__main__':
     p_pool = []
-    uuid = 100
+    uuid = 4
     for i in range(1):
         p = Process(target=clientAsy,args=(uuid,))
         p_pool.append(p)
