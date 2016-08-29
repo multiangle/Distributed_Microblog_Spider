@@ -241,7 +241,7 @@ class proxy_keep_thread(threading.Thread):
             # cannot provide proxy to this client
             err_str='error: client -> get_proxy_pool : fail to ' \
                     'get proxy from server'
-            info_manager(err_str,type='KEY')
+            info_manager(err_str,type='NORMAL')
             time.sleep(1)
             return
 
@@ -251,7 +251,7 @@ class proxy_keep_thread(threading.Thread):
         except Exception as e:
             err_str='error: client -> get_proxy_pool : fail to ' \
                     'parse proxy str info:\r\n'+res
-            info_manager(err_str,type='KEY')
+            info_manager(err_str,type='NORMAL')
             return
 
         proxy_pool[:]=proxy_pool[:]+data
