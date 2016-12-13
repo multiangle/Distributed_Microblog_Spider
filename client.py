@@ -1016,6 +1016,9 @@ class getHistory(threading.Thread):
                         print('Error from getHistory_subThread.run_2',e)
                         continue
 
+# global key_set
+# key_set = []
+
 class parseMicroblogPage():
 
     def __init__(self):
@@ -1066,6 +1069,14 @@ class parseMicroblogPage():
     def parse_card_inner(self,data):
         msg={}
         keys=list(data.keys())
+
+        # # debug for key set
+        # global key_set
+        # for x in keys:
+        #     if x not in key_set:
+        #         key_set.append(x)
+        # print(key_set)
+        # print(key_set.__len__())
 
         key_array=[
             # 基本信息--------------------------------------------------------------
